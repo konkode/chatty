@@ -13,12 +13,12 @@ import chatty.gui.components.menus.StreamsContextMenu;
 import chatty.gui.components.menus.UserContextMenu;
 import chatty.gui.components.settings.ListTableModel;
 import chatty.util.DateTime;
-import chatty.util.Debugging;
+//import chatty.util.Debugging;
 import chatty.util.StringUtil;
 import chatty.util.api.Follower;
 import chatty.util.api.FollowerInfo;
 import chatty.util.api.TwitchApi;
-import chatty.util.colors.ColorCorrectionNew;
+//import chatty.util.colors.ColorCorrectionNew;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
@@ -37,13 +37,13 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
+//import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
+//import java.util.concurrent.ThreadLocalRandom;
 import javax.swing.BorderFactory;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
@@ -85,14 +85,14 @@ public class FollowersDialog extends JDialog {
     private static final int REFRESH_TIMER = 10*1000;
     
     private final JLabel total = new JLabel("Total: 123.456 (+123.456)");
-    private final JLabel stats = new JLabel("| Week: 99+ | Day: 99+ | Hour: 23");
+    private final JLabel stats = new JLabel("| Mo: 99+ | Wk: 99+ | Day: 99+ | Hr: 23");
     
     private final JTable table;
     private final ListTableModel<Follower> followers = new MyListTableModel();
     private final JLabel loadInfo = new JLabel();
     
     private final TwitchApi api;
-    private final MainGui main;
+	private final MainGui main;
     private final Type type;
     private final ContextMenuListener contextMenuListener;
     
@@ -143,7 +143,7 @@ public class FollowersDialog extends JDialog {
         gbc = GuiUtil.makeGbc(0, 1, 1, 1, GridBagConstraints.WEST);
         gbc.insets = new Insets(0, 6, 3, 5);
         gbc.weightx = 1;
-        stats.setToolTipText(type+" in the last 7 days (Week), 24 hours (Day) and Hour (based on the current list)");
+        stats.setToolTipText(type+" in the last 30 days (Month), 7 days (Week), 24 hours (Day) and Hour. Based on the current list.");
         add(stats, gbc);
         
         gbc = GuiUtil.makeGbc(0, 2, 2, 1);
@@ -154,10 +154,8 @@ public class FollowersDialog extends JDialog {
         table = new JTable(followers);
         table.setShowGrid(false);
         table.setTableHeader(null);
-        // Note: Column widths are adjusted when data is loaded
         table.getColumnModel().getColumn(0).setCellRenderer(new MyRenderer(MyRenderer.Type.NAME));
         table.getColumnModel().getColumn(1).setCellRenderer(new MyRenderer(MyRenderer.Type.TIME));
-        table.getColumnModel().getColumn(2).setCellRenderer(new MyRenderer(MyRenderer.Type.USER_TIME));
         int nameMinWidth = table.getFontMetrics(table.getFont()).stringWidth("reasonblylong");
         table.getColumnModel().getColumn(0).setMinWidth(nameMinWidth);
         table.setIntercellSpacing(new Dimension(0, 0));
@@ -199,19 +197,19 @@ public class FollowersDialog extends JDialog {
             
             @Override
             public void mouseClicked(MouseEvent e) {
-                if (e.getClickCount() == 2) {
-                    int selectedRow = table.getSelectedRow();
-                    if (selectedRow != -1) {
-                        Follower follower = followers.get(selectedRow);
+				if (e.getClickCount() == 2) {
+					int selectedRow = table.getSelectedRow();
+					if (selectedRow != -1) {
+						Follower follower = followers.get(selectedRow);
                         User user = main.getUser(Helper.toChannel(stream), follower.name);
                         contextMenuListener.userMenuItemClicked(
-                                new ActionEvent(this, ActionEvent.ACTION_FIRST, "userinfo"),
-                                user, null, null);
-                    }
-                }
-            }
+							new ActionEvent(this, ActionEvent.ACTION_FIRST, "userinfo"),
+							user, null, null);
+					}
+				}
+			}
         });
-        // Add to content pane, seems to work better than adding to "this"
+       // Add to content pane, seems to work better than adding to "this"
         getContentPane().addMouseListener(new MouseAdapter() {
             
             @Override
@@ -257,11 +255,11 @@ public class FollowersDialog extends JDialog {
                 streams.add(StringUtil.toLowerCase(selected.name));
             }
             if (streams.size() == 1) {
-                User user = main.getUser(Helper.toChannel(stream), streams.iterator().next());
+				User user = main.getUser(Helper.toChannel(stream), streams.iterator().next());
                 ContextMenu m = new UserContextMenu(user, null, null, contextMenuListener);
                 m.show(table, e.getX(), e.getY());
-            }
-            else if (!streams.isEmpty()) {
+			}
+			else if (!streams.isEmpty()) {
                 ContextMenu m = new StreamsContextMenu(streams, contextMenuListener);
                 m.show(table, e.getX(), e.getY());
             }
@@ -273,23 +271,18 @@ public class FollowersDialog extends JDialog {
             mainContextMenu.show(e.getComponent(), e.getX(), e.getY());
         }
     }
-    
-    private void adjustColumnSize() {
-        adjustColumnSize(1);
-        adjustColumnSize(2);
-    }
 
     /**
      * Adjust the width of the time column to fit the current times.
      */
-    private void adjustColumnSize(int column) {
+    private void adjustColumnSize() {
         int width = 0;
         for (int row = 0; row < table.getRowCount(); row++) {
-            TableCellRenderer renderer = table.getCellRenderer(row, column);
-            Component comp = table.prepareRenderer(renderer, row, column);
+            TableCellRenderer renderer = table.getCellRenderer(row, 1);
+            Component comp = table.prepareRenderer(renderer, row, 1);
             width = Math.max(comp.getPreferredSize().width, width);
         }
-        setColumnWidth(column, width, width, width);
+        setColumnWidth(1, width, width, width);
     }
 
     /**
@@ -386,9 +379,6 @@ public class FollowersDialog extends JDialog {
      * @param info The FollowerInfo to set
      */
     public void setFollowerInfo(FollowerInfo info) {
-        if (Debugging.isEnabled("followerTest")) {
-            info = createTestFollowerInfo();
-        }
         if (info.stream.equals(stream)) {
             loading = false;
             if (!info.requestError &&
@@ -447,7 +437,7 @@ public class FollowersDialog extends JDialog {
             stats.setText("| "+Stats.makeFullStats(lastValidInfo));
             //System.out.println("Update stats");
         } else {
-            stats.setText("| Week: - | Day: - | Hour: -");
+            stats.setText("| Mo: - | Wk: - | Day: - | Hr: -");
         }
     }
     
@@ -489,25 +479,18 @@ public class FollowersDialog extends JDialog {
      * depending on the type set (but same background colors).
      */
     private static class MyRenderer extends DefaultTableCellRenderer {
+
+        private static final Color BG_COLOR_NEW = LaF.isDarkTheme() ? new Color(90, 20, 0) : new Color(255,245,210);
+        private static final Color BG_COLOR_RECENT = LaF.isDarkTheme() ? new Color(90, 48, 36) : new Color(255,250,240);
+        private static final Color BG_COLOR_HOUR = LaF.isDarkTheme() ? new Color(82, 87, 82) : new Color(245,245,245);
         
-        private static final Color BG_COLOR_NEW = LaF.isDarkTheme() ? new Color(114, 0, 0) : new Color(255,245,210);
-        private static final Color BG_COLOR_RECENT;
-        
-        private static final Color COLOR_OLDER_THAN_WEEK;
-        private static final Color COLOR_OLDER_THAN_DAY;
-        
-        static {
-            JTable table = new JTable();
-            BG_COLOR_RECENT = ColorCorrectionNew.offset(table.getBackground(), 0.96f);
-            
-            COLOR_OLDER_THAN_WEEK = ColorCorrectionNew.offset(table.getForeground(), 0.6f);
-            COLOR_OLDER_THAN_DAY = ColorCorrectionNew.offset(table.getForeground(), 0.78f);
-        }
+        private static final Color COLOR_OLDER_THAN_WEEK = LaF.isDarkTheme() ? new Color(120, 120, 120) : new Color(180, 180, 180);
+        private static final Color COLOR_OLDER_THAN_DAY = LaF.isDarkTheme() ? new Color(180, 180, 180) : new Color(120, 120, 120) ;
         
         private final Type type;
         
         public enum Type {
-            NAME, TIME, USER_TIME
+            NAME, TIME
         }
         
         public MyRenderer(Type type) {
@@ -538,22 +521,13 @@ public class FollowersDialog extends JDialog {
                     setToolTipText(null);
                 }
                 else {
-                    setText(f.display_name + " (" + f.name + ")");
+                    setText(f.display_name+" ("+f.name+")");
                     setToolTipText(f.name);
                 }
             }
             else if (type == Type.TIME) {
                 setText(DateTime.agoSingleVerbose(f.follow_time));
-                setToolTipText("Followed "+DateTime.formatFullDatetime(f.follow_time));
-            }
-            else if (type == Type.USER_TIME) {
-                if (f.user_created_time != -1) {
-                    setText("("+DateTime.agoSingleVerbose(f.user_created_time)+")");
-                    setToolTipText("Registered "+DateTime.formatFullDatetime(f.user_created_time));
-                } else {
-                    setText("(n/a)");
-                    setToolTipText("Time when user registered not available");
-                }
+                setToolTipText(DateTime.formatFullDatetime(f.follow_time));
             }
 
             // Colors
@@ -567,8 +541,10 @@ public class FollowersDialog extends JDialog {
                 long ago = (System.currentTimeMillis() - f.follow_time) / 1000;
                 if (f.newFollower) {
                     setBackground(BG_COLOR_NEW);
-                } else if (ago < 60 * 60) {
+                } else if (ago < 15 * 60) {
                     setBackground(BG_COLOR_RECENT);
+                } else if (ago < 60 * 60) {
+                    setBackground(BG_COLOR_HOUR);
                 } else {
                     setBackground(table.getBackground());
                 }
@@ -577,15 +553,6 @@ public class FollowersDialog extends JDialog {
                     if (ago > 60 * 60 * 24 * 7) {
                         setForeground(COLOR_OLDER_THAN_WEEK);
                     } else if (ago > 60 * 60 * 24) {
-                        setForeground(COLOR_OLDER_THAN_DAY);
-                    }
-                }
-                // Set foreground for registered time
-                if (type == Type.USER_TIME && f.user_created_time != -1) {
-                    long registeredAgo = (System.currentTimeMillis() - f.user_created_time) / 1000;
-                    if (registeredAgo >= 60 * 60 * 24 * 7) {
-                        setForeground(COLOR_OLDER_THAN_WEEK);
-                    } else if (registeredAgo >= 60 * 60 * 24) {
                         setForeground(COLOR_OLDER_THAN_DAY);
                     }
                 }
@@ -625,9 +592,10 @@ public class FollowersDialog extends JDialog {
             add(60*15, "Last 15 Minutes");
             add(60*5, "Last 5 Minutes");
 
-            add2(60*60*24*7, "Week");
+            add2(60*60*24*30, "Mo");
+            add2(60*60*24*7, "Wk");
             add2(60*60*24, "Day");
-            add2(60*60, "Hour");
+            add2(60*60, "Hr");
         }
         
         private static void add(int seconds, String label) {
@@ -697,7 +665,7 @@ public class FollowersDialog extends JDialog {
     private class MyListTableModel extends ListTableModel<Follower> {
 
         public MyListTableModel() {
-            super(new String[]{"Name","Followed","User Created"});
+            super(new String[]{"Name","Followed"});
         }
 
         /**
@@ -732,41 +700,6 @@ public class FollowersDialog extends JDialog {
             }
         }
         
-    }
-    
-    private FollowerInfo createTestFollowerInfo() {
-        List<Follower> test = new ArrayList<>();
-        test.add(createTestFollower(stream, 30, 24*60, true));
-        test.add(createTestFollower(stream, 80, 24*1087, true));
-        test.add(createTestFollower(stream, 90, 1, true));
-        test.add(createTestFollower(stream, 120, 10, false));
-        test.add(createTestFollower(stream, 180, 24*12, false));
-        test.add(createTestFollower(stream, 680, 36, false));
-        test.add(createTestFollower(stream, 980, 24*5, false));
-        test.add(createTestFollower(stream, 1800, 24*800, false));
-        test.add(createTestFollower(stream, 1900, 24*500, false));
-        test.add(createTestFollower(stream, 2900, 24*500, false));
-        test.add(createTestFollower(stream, 60*60, 24*321, false));
-        test.add(createTestFollower(stream, 60*60, 24*1234, false));
-        test.add(createTestFollower(stream, 60*60, 391, false));
-        test.add(createTestFollower(stream, 60*60*2, 60, false));
-        test.add(createTestFollower(stream, 60*60*3, 24*123, false));
-        test.add(createTestFollower(stream, 60*60*3, 24*5, false));
-        test.add(createTestFollower(stream, 60*60*24*2, 24*1, false));
-        test.add(createTestFollower(stream, 60*60*24*3, 24*234, false));
-        test.add(createTestFollower(stream, 60*60*24*8, 24*12, false));
-        test.add(createTestFollower(stream, 60*60*24*90, 24*800, false));
-        test.add(createTestFollower(stream, 60*60*24*90, 24*12544, false));
-        test.add(createTestFollower(stream, 60*60*24*180, 24*900, false));
-        test.add(createTestFollower(stream, 60*60*24*180, 24*900, false));
-        test.add(createTestFollower(stream, 60*60*24*180, 24*900, false));
-        test.add(createTestFollower(stream, 60*60*24*180, 24*900, false));
-        return new FollowerInfo(Follower.Type.FOLLOWER, stream, test, 1338);
-    }
-    
-    private static Follower createTestFollower(String name, long timeOffset, long userOffset, boolean newFollower) {
-        boolean refollow = ThreadLocalRandom.current().nextInt(20) == 0;
-        return new Follower(Follower.Type.FOLLOWER, name, name, System.currentTimeMillis() - timeOffset*1000, System.currentTimeMillis() - userOffset*60*60*1000, refollow, newFollower);
     }
     
 }
