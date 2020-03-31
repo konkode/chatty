@@ -92,7 +92,7 @@ public class FollowersDialog extends JDialog {
     private final JLabel loadInfo = new JLabel();
     
     private final TwitchApi api;
-	private final MainGui main;
+    private final MainGui main;
     private final Type type;
     private final ContextMenuListener contextMenuListener;
     
@@ -154,6 +154,7 @@ public class FollowersDialog extends JDialog {
         table = new JTable(followers);
         table.setShowGrid(false);
         table.setTableHeader(null);
+
         table.getColumnModel().getColumn(0).setCellRenderer(new MyRenderer(MyRenderer.Type.NAME));
         table.getColumnModel().getColumn(1).setCellRenderer(new MyRenderer(MyRenderer.Type.TIME));
         int nameMinWidth = table.getFontMetrics(table.getFont()).stringWidth("reasonblylong");
@@ -197,17 +198,17 @@ public class FollowersDialog extends JDialog {
             
             @Override
             public void mouseClicked(MouseEvent e) {
-				if (e.getClickCount() == 2) {
-					int selectedRow = table.getSelectedRow();
-					if (selectedRow != -1) {
-						Follower follower = followers.get(selectedRow);
+                if (e.getClickCount() == 2) {
+                    int selectedRow = table.getSelectedRow();
+                    if (selectedRow != -1) {
+                        Follower follower = followers.get(selectedRow);
                         User user = main.getUser(Helper.toChannel(stream), follower.name);
                         contextMenuListener.userMenuItemClicked(
-							new ActionEvent(this, ActionEvent.ACTION_FIRST, "userinfo"),
-							user, null, null);
-					}
-				}
-			}
+                                new ActionEvent(this, ActionEvent.ACTION_FIRST, "userinfo"),
+                                user, null, null);
+                    }
+                }
+            }
         });
        // Add to content pane, seems to work better than adding to "this"
         getContentPane().addMouseListener(new MouseAdapter() {
@@ -255,11 +256,11 @@ public class FollowersDialog extends JDialog {
                 streams.add(StringUtil.toLowerCase(selected.name));
             }
             if (streams.size() == 1) {
-				User user = main.getUser(Helper.toChannel(stream), streams.iterator().next());
+                User user = main.getUser(Helper.toChannel(stream), streams.iterator().next());
                 ContextMenu m = new UserContextMenu(user, null, null, contextMenuListener);
                 m.show(table, e.getX(), e.getY());
-			}
-			else if (!streams.isEmpty()) {
+            }
+            else if (!streams.isEmpty()) {
                 ContextMenu m = new StreamsContextMenu(streams, contextMenuListener);
                 m.show(table, e.getX(), e.getY());
             }
