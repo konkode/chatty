@@ -1,3 +1,13 @@
+This fork focuses on quality of life changes for growing streamers. Tracks stable feature releases and bug fixes from beta builds.
+
+#### Features
+
+* Followers dialog window streamlined for new viewer engagement
+* Full dark theme support in Followers dialog
+* Stability plus latest bug fixes
+
+![](assets/img/followsDark.png)
+
 Chatty
 ======
 
