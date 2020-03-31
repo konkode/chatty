@@ -1,10 +1,15 @@
+
+## Chatty-kon
+
 This fork focuses on quality of life changes for growing streamers. Tracks stable feature releases and bug fixes from beta builds.
+
+[Discord](https://discord.gg/WsVvXNa) | [Twitter](https://twitter.com/KonQuesting) | [Twitch](https://www.twitch.tv/konquesting)
 
 #### Features
 
 * Followers dialog window streamlined for new viewer engagement
 * Full dark theme support in Followers dialog
-* Stability plus latest bug fixes
+* Latest bug fixes backported to stable release
 
 ![](assets/img/followsDark.png)
 

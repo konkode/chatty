@@ -16,7 +16,7 @@ public class GitHub {
     
     private static final Logger LOGGER = Logger.getLogger(GitHub.class.getName());
     
-    private static final String URL = "https://api.github.com/repos/chatty/chatty/releases";
+    private static final String URL = "https://api.github.com/repos/KonKode/chatty/releases";
     
     public static Releases getReleases() {
         UrlRequest request = new UrlRequest(URL);
