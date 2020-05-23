@@ -175,6 +175,10 @@ public class StreamInfoManager {
         return cached;
     }
     
+    public synchronized StreamInfo getCachedStreamInfo(String stream) {
+        return cachedStreamInfo.get(StringUtil.toLowerCase(stream));
+    }
+    
     /**
      * Gets a StreamInfo object for the given stream name. Either returns the
      * already existing StreamInfo object for this stream or creates a new one.
@@ -461,6 +465,12 @@ public class StreamInfoManager {
             return -1;
         }
     }
+    
+    /**
+     * If uptime is greater than 10 years, it's probably not valid. Streams that
+     * just started appear to sometimes return a wrong start time.
+     */
+    private static final long VALID_UPTIME_LIMIT = 10*365*24*60*60*1000;
 
     /**
      * Parse a stream object into a StreamInfo object. This gets the name of the
@@ -486,8 +496,8 @@ public class StreamInfoManager {
         StreamType streamType;
         long timeStarted = -1;
         String userId = null;
-        List<String> community_ids;
         boolean noChannelObject = false;
+        String logo;
         try {
             // Get stream data
             viewersTemp = (Number) stream.get("viewers");
@@ -527,6 +537,7 @@ public class StreamInfoManager {
                 LOGGER.warning("Error parsing StreamInfo: no channel object ("+name+")");
                 noChannelObject = true;
             }
+            logo = JSONUtil.getString(channel, "logo");
         } catch (ClassCastException ex) {
             LOGGER.warning("Error parsing StreamInfo: unpexected type");
             return null;
@@ -544,6 +555,10 @@ public class StreamInfoManager {
         // Try to parse created_at
         try {
             timeStarted = DateTime.parseDatetime((String) stream.get("created_at"));
+            if (timeStarted + VALID_UPTIME_LIMIT < System.currentTimeMillis()) {
+                LOGGER.warning("Warning: Stream created_at for "+name+" seems invalid ("+stream.get("created_at")+")");
+                timeStarted = -1;
+            }
         } catch (Exception ex) {
             LOGGER.warning("Warning parsing StreamInfo: could not parse created_at ("+ex+")");
         }
@@ -568,6 +583,9 @@ public class StreamInfoManager {
         if (streamInfo.setUserId(userId)) {
             // If not already done, send userId to UserIDs manager
             api.setUserId(name, userId);
+        }
+        if (logo != null) {
+            streamInfo.setLogo(logo);
         }
         
         // Community (if cached, will immediately set Community correct again

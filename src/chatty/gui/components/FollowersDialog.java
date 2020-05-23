@@ -26,7 +26,6 @@ import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
-import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
@@ -98,6 +97,9 @@ public class FollowersDialog extends JDialog {
     
     private final MyContextMenu mainContextMenu = new MyContextMenu();
     
+    private final MyRenderer timeRenderer = new MyRenderer(MyRenderer.Type.TIME);
+    private final MyRenderer timeRenderer2 = new MyRenderer(MyRenderer.Type.USER_TIME);
+
     /**
      * What stream the dialog was opened for.
      */
@@ -122,7 +124,11 @@ public class FollowersDialog extends JDialog {
      * When the data was last updated.
      */
     private long lastUpdated = -1;
+    
+    private boolean compactMode;
 
+    private boolean showRegistered;
+    
     public FollowersDialog(Type type, MainGui owner, final TwitchApi api,
             ContextMenuListener contextMenuListener) {
         super(owner);
@@ -154,9 +160,10 @@ public class FollowersDialog extends JDialog {
         table = new JTable(followers);
         table.setShowGrid(false);
         table.setTableHeader(null);
-
+        // Note: Column widths are adjusted when data is loaded
         table.getColumnModel().getColumn(0).setCellRenderer(new MyRenderer(MyRenderer.Type.NAME));
-        table.getColumnModel().getColumn(1).setCellRenderer(new MyRenderer(MyRenderer.Type.TIME));
+        table.getColumnModel().getColumn(1).setCellRenderer(timeRenderer);
+        table.getColumnModel().getColumn(2).setCellRenderer(timeRenderer2);
         int nameMinWidth = table.getFontMetrics(table.getFont()).stringWidth("reasonblylong");
         table.getColumnModel().getColumn(0).setMinWidth(nameMinWidth);
         table.setIntercellSpacing(new Dimension(0, 0));
@@ -210,7 +217,7 @@ public class FollowersDialog extends JDialog {
                 }
             }
         });
-       // Add to content pane, seems to work better than adding to "this"
+        // Add to content pane, seems to work better than adding to "this"
         getContentPane().addMouseListener(new MouseAdapter() {
             
             @Override
@@ -227,7 +234,44 @@ public class FollowersDialog extends JDialog {
         pack();
         setSize(300,400);
     }
-    
+
+    public void setCompactMode(boolean compactMode) {
+        this.compactMode = compactMode;
+        timeRenderer.setCompactMode(compactMode);
+        timeRenderer2.setCompactMode(compactMode);
+        updateColumnsAfterSettingChange();
+    }
+
+    private TableColumn regColumn;
+
+    public void setShowRegistered(boolean show) {
+        this.showRegistered = show;
+        if (!show) {
+            if (regColumn == null) {
+                TableColumn column = table.getColumnModel().getColumn(2);
+                table.removeColumn(column);
+                regColumn = column;
+            }
+        }
+        else {
+            if (regColumn != null) {
+                table.addColumn(regColumn);
+                regColumn = null;
+            }
+        }
+        updateColumnsAfterSettingChange();
+    }
+
+    private void updateColumnsAfterSettingChange() {
+        adjustColumnSize();
+        if (currentInfo != null) {
+            // Reset data for proper resizing
+            FollowerInfo current = currentInfo;
+            setFollowerInfo(new FollowerInfo(Follower.Type.FOLLOWER, stream, ""));
+            setFollowerInfo(current);
+        }
+    }
+
     /**
      * Select the row the mouse cursor is over, except if it is already over an
      * selected row, in which case it just keeps the current selection.
@@ -255,13 +299,18 @@ public class FollowersDialog extends JDialog {
                 Follower selected = followers.get(selectedRow);
                 streams.add(StringUtil.toLowerCase(selected.name));
             }
+            ContextMenu m = null;
             if (streams.size() == 1) {
                 User user = main.getUser(Helper.toChannel(stream), streams.iterator().next());
-                ContextMenu m = new UserContextMenu(user, null, null, contextMenuListener);
-                m.show(table, e.getX(), e.getY());
+                m = new UserContextMenu(user, null, null, contextMenuListener);
             }
             else if (!streams.isEmpty()) {
-                ContextMenu m = new StreamsContextMenu(streams, contextMenuListener);
+                m = new StreamsContextMenu(streams, contextMenuListener);
+            }
+            if (m != null) {
+                m.addSeparator();
+                m.addCheckboxItem("toggleBoolean_followersCompact", "Compact Mode", compactMode);
+                m.addCheckboxItem("toggleBoolean_followersReg", "Show Registered", showRegistered);
                 m.show(table, e.getX(), e.getY());
             }
         }
@@ -273,17 +322,24 @@ public class FollowersDialog extends JDialog {
         }
     }
 
+    private void adjustColumnSize() {
+        adjustColumnSize(1);
+        if (showRegistered) {
+            adjustColumnSize(2);
+        }
+    }
+    
     /**
      * Adjust the width of the time column to fit the current times.
      */
-    private void adjustColumnSize() {
+    private void adjustColumnSize(int column) {
         int width = 0;
         for (int row = 0; row < table.getRowCount(); row++) {
-            TableCellRenderer renderer = table.getCellRenderer(row, 1);
-            Component comp = table.prepareRenderer(renderer, row, 1);
+            TableCellRenderer renderer = table.getCellRenderer(row, column);
+            Component comp = table.prepareRenderer(renderer, row, column);
             width = Math.max(comp.getPreferredSize().width, width);
         }
-        setColumnWidth(1, width, width, width);
+        setColumnWidth(column, width, width, width);
     }
 
     /**
@@ -491,12 +547,18 @@ public class FollowersDialog extends JDialog {
         private final Type type;
         
         public enum Type {
-            NAME, TIME
+            NAME, TIME, USER_TIME
         }
+        
+        private boolean compactMode;
         
         public MyRenderer(Type type) {
             this.type = type;
             setBorder(BorderFactory.createEmptyBorder(2, 5, 2, 5));
+        }
+        
+        public void setCompactMode(boolean compactMode) {
+            this.compactMode = compactMode;
         }
         
         @Override
@@ -522,15 +584,34 @@ public class FollowersDialog extends JDialog {
                     setToolTipText(null);
                 }
                 else {
-                    setText(f.display_name+" ("+f.name+")");
+                    setText(f.display_name + " (" + f.name + ")");
                     setToolTipText(f.name);
                 }
             }
             else if (type == Type.TIME) {
-                setText(DateTime.agoSingleVerbose(f.follow_time));
+                if (compactMode) {
+                    setText(DateTime.agoSingleCompact(f.follow_time));
+                }
+                else {
+                    setText(DateTime.agoSingleVerbose(f.follow_time));
+                }
                 setToolTipText(DateTime.formatFullDatetime(f.follow_time));
             }
-
+            else if (type == Type.USER_TIME) {
+                if (f.user_created_time != -1) {
+                    if (compactMode) {
+                        setText("("+DateTime.agoSingleCompact(f.user_created_time)+")");
+                    }
+                    else {
+                        setText("("+DateTime.agoSingleVerbose(f.user_created_time)+")");
+                    }
+                    setToolTipText("Registered "+DateTime.formatFullDatetime(f.user_created_time));
+                } else {
+                    setText("(n/a)");
+                    setToolTipText("Time when user registered not available");
+                }
+            }
+            
             // Colors
             if (isSelected) {
                 setBackground(table.getSelectionBackground());
@@ -666,7 +747,7 @@ public class FollowersDialog extends JDialog {
     private class MyListTableModel extends ListTableModel<Follower> {
 
         public MyListTableModel() {
-            super(new String[]{"Name","Followed"});
+            super(new String[]{"Name","Followed","User Created"});
         }
 
         /**
