@@ -105,12 +105,11 @@ External Libraries
 	(for the license text see the APACHE_LICENSE file
 	or <http://www.apache.org/licenses/LICENSE-2.0>).
 
-* JIntellitype:
-  * Files under `assets/lib/`: `jintellitype-*.jar`, `Jintellitype*.dll`, `jintellitype-*-dist.zip`
-  * Website: <https://code.google.com/p/jintellitype/>
-  * License: "Apache License 2.0"
-	(for the license text see the APACHE_LICENSE file
-	or <http://www.apache.org/licenses/LICENSE-2.0>).
+* JKeyMaster (modified):
+  * Files under `assets/lib/`: `jkeymaster-*`
+  * Website: <https://github.com/tulskiy/jkeymaster>
+  * License: "LGPL-3.0 License"
+  * Using JNA (<https://github.com/java-native-access/jna>) under "Apache License 2.0"
 
 * JTattoo by MH Software-Entwicklung:
   * Files under `assets/lib/`: `JTattoo-*.jar`, `JTattoo-*-sources.zip`
@@ -151,14 +150,14 @@ Images / Other
 		dialog-warning.png, go-down.png, go-up.png, go-next.png,
 		go-previous.png, go-home.png, go-web.png,
 		image-icon.png, commandline.png, edit-copy.png, sort.png,
-		edit-all.png (edited)`
+		edit-all.png (edited), reply.png (edited)`
   * Source: <http://tango.freedesktop.org>/Tango_Icon_Library
   * License: Released into the Public Domain
 
 * Misc Icons from NUVOLA ICON THEME for KDE 3.x
 		by David Vignoni:
   * Files (in various folders): `edit.png, ok.png, no.png, colorpicker.png,
-		warning.png, download.png`
+		warning.png, download.png, game.png`
   * Source: <http://www.icon-king.com/projects/nuvola/>
   * License: LGPL
 	(for the license text see the LGPL file or
