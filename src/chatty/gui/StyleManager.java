@@ -45,13 +45,14 @@ public class StyleManager implements StyleServer {
             "inputFont","emoteScale", "emoteMaxHeight", "botBadgeEnabled",
             "filterCombiningCharacters", "pauseChatOnMouseMove",
             "pauseChatOnMouseMoveCtrlRequired", "showAnimatedEmotes",
+            "animatedEmotes",
             "banReasonAppended", "banDurationAppended",
             "banDurationMessage", "banReasonMessage", "displayNamesMode",
             "paragraphSpacing", "bufferSizes", "userlistFont",
             "showImageTooltips", "showTooltipImages", "highlightMatches",
             "nickColorCorrection",
             "mentions", "mentionsInfo", "markHoveredUser", "highlightMatchesAll",
-            "nickColorBackground", "mentionMessages",
+            "nickColorBackground", "mentionMessages", "msgColorsLinks",
             "inputHistoryMultirowRequireCtrl" // Not delievered through this
             ));
     
@@ -214,11 +215,13 @@ public class StyleManager implements StyleServer {
         addBooleanSetting(Setting.SHOW_TOOLTIPS, "showImageTooltips");
         addBooleanSetting(Setting.SHOW_TOOLTIP_IMAGES, "showTooltipImages");
         addBooleanSetting(Setting.HIGHLIGHT_MATCHES_ALL, "highlightMatchesAll");
+        addBooleanSetting(Setting.LINKS_CUSTOM_COLOR, "msgColorsLinks");
         addLongSetting(Setting.HIGHLIGHT_HOVERED_USER, "markHoveredUser");
         addLongSetting(Setting.FILTER_COMBINING_CHARACTERS, "filterCombiningCharacters");
         addBooleanSetting(Setting.PAUSE_ON_MOUSEMOVE, "pauseChatOnMouseMove");
         addBooleanSetting(Setting.PAUSE_ON_MOUSEMOVE_CTRL_REQUIRED, "pauseChatOnMouseMoveCtrlRequired");
-        addBooleanSetting(Setting.EMOTICONS_SHOW_ANIMATED, "showAnimatedEmotes");
+        addBooleanSetting(Setting.EMOTICONS_BTTV_SHOW_ANIMATED, "showAnimatedEmotes");
+        addBooleanSetting(Setting.EMOTICONS_ANIMATED, "animatedEmotes");
         addLongSetting(Setting.USERCOLOR_BACKGROUND, "nickColorBackground");
         addLongSetting(Setting.BOTTOM_MARGIN, "bottomMargin");
         addLongSetting(Setting.MENTIONS, "mentions");

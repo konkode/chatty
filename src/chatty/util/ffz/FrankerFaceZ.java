@@ -31,6 +31,9 @@ public class FrankerFaceZ {
     
     // State
     private boolean botNamesRequested;
+    private String botBadgeId = null;
+    // stream -> roomBadges(badgeId -> names)
+    private final Map<String, Map<String, Set<String>>> roomBadgeUsernames = new HashMap<>();
 
     /**
      * Feature Friday
@@ -248,6 +251,7 @@ public class FrankerFaceZ {
         } else if (type == Type.ROOM) {
             // If type is ROOM, stream should be available
             emotes = FrankerFaceZParsing.parseRoomEmotes(result, stream);
+            addRoomBadgeUsernames(stream, FrankerFaceZParsing.parseRoomBadges(result));
             Usericon modIcon = FrankerFaceZParsing.parseModIcon(result, stream);
             if (modIcon != null) {
                 usericons.add(modIcon);
@@ -267,14 +271,12 @@ public class FrankerFaceZ {
         }
         
         // Package accordingly and send the result to the listener
-        EmoticonUpdate emotesUpdate;
+        EmoticonUpdate.Builder updateBuilder = new EmoticonUpdate.Builder(emotes);
         if (type == Type.FEATURE_FRIDAY) {
-            emotesUpdate = new EmoticonUpdate(emotes, Emoticon.Type.FFZ,
-                     Emoticon.SubType.FEATURE_FRIDAY, null, null);
-        } else {
-            emotesUpdate = new EmoticonUpdate(emotes);
+            updateBuilder.setTypeToRemove(Emoticon.Type.FFZ);
+            updateBuilder.setSubTypeToRemove(Emoticon.SubType.FEATURE_FRIDAY);
         }
-        listener.channelEmoticonsReceived(emotesUpdate);
+        listener.channelEmoticonsReceived(updateBuilder.build());
         // Return icons if mod icon was found (will be empty otherwise)
         listener.usericonsReceived(usericons);
     }
@@ -337,11 +339,10 @@ public class FrankerFaceZ {
      * Send a message to the listener to clear all FFZ Feature Friday emotes.
      */
     private void clearFeatureFridayEmotes() {
-        listener.channelEmoticonsReceived(new EmoticonUpdate(null,
-                Emoticon.Type.FFZ,
-                Emoticon.SubType.FEATURE_FRIDAY,
-                null,
-                null));
+        EmoticonUpdate.Builder updateBuilder = new EmoticonUpdate.Builder(null);
+        updateBuilder.setTypeToRemove(Emoticon.Type.FFZ);
+        updateBuilder.setSubTypeToRemove(Emoticon.SubType.FEATURE_FRIDAY);
+        listener.channelEmoticonsReceived(updateBuilder.build());
     }
 
     /**
@@ -354,8 +355,55 @@ public class FrankerFaceZ {
             if (result != null && responseCode == 200) {
                 Set<String> botNames = FrankerFaceZParsing.getBotNames(result);
                 LOGGER.info("|[FFZ Bots] Found " + botNames.size() + " names");
-                listener.botNamesReceived(botNames);
+                listener.botNamesReceived(null, botNames);
+                synchronized(roomBadgeUsernames) {
+                    // Find bot badge id, so it can be used for room badges
+                    botBadgeId = FrankerFaceZParsing.getBotBadgeId(result);
+                }
+                updateRoomBotNames();
             }
         });
     }
+    
+    /**
+     * Cache room badges, so bot names can be retrieved from it.
+     * 
+     * @param stream
+     * @param names 
+     */
+    private void addRoomBadgeUsernames(String stream, Map<String, Set<String>> names) {
+        if (stream == null || names == null || names.isEmpty()) {
+            return;
+        }
+        synchronized(roomBadgeUsernames) {
+            roomBadgeUsernames.put(stream, names);
+        }
+        updateRoomBotNames();
+    }
+    
+    /**
+     * Check the cached room badges for the bot badge id and add the bot names
+     * if present. Clear cached badges afterwards since they don't have any
+     * other use at the moment.
+     */
+    private void updateRoomBotNames() {
+        Map<String, Set<String>> result = new HashMap<>();
+        synchronized (roomBadgeUsernames) {
+            if (botBadgeId != null) {
+                for (Map.Entry<String, Map<String, Set<String>>> room : roomBadgeUsernames.entrySet()) {
+                    String stream = room.getKey();
+                    Set<String> names = room.getValue().get(botBadgeId);
+                    if (names != null) {
+                        result.put(stream, names);
+                    }
+                }
+                roomBadgeUsernames.clear();
+            }
+        }
+        for (Map.Entry<String, Set<String>> entry : result.entrySet()) {
+            LOGGER.info("|[FFZ Bots] ("+entry.getKey()+"): Found " + entry.getValue().size() + " names");
+            listener.botNamesReceived(entry.getKey(), entry.getValue());
+        }
+    }
+    
 }

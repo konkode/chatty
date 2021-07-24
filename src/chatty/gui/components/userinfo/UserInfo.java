@@ -4,12 +4,15 @@ package chatty.gui.components.userinfo;
 import chatty.Helper;
 import chatty.User;
 import chatty.gui.GuiUtil;
+import chatty.gui.MainGui;
 import chatty.gui.components.menus.ContextMenuAdapter;
 import chatty.gui.components.menus.ContextMenuListener;
 import chatty.gui.components.menus.UserContextMenu;
 import static chatty.gui.components.userinfo.Util.makeGbc;
 import chatty.lang.Language;
 import chatty.util.MiscUtil;
+import chatty.util.Pronouns;
+import chatty.util.StringUtil;
 import chatty.util.api.ChannelInfo;
 import chatty.util.api.Follower;
 import chatty.util.api.TwitchApi;
@@ -39,10 +42,11 @@ public class UserInfo extends JDialog {
     }
     
     private final InfoPanel infoPanel;
-    private final PastMessages pastMessages = new PastMessages();
+    private final PastMessages pastMessages;
 
     private final JButton closeButton = new JButton(Language.getString("dialog.button.close"));
     private final JCheckBox pinnedDialog = new JCheckBox(Language.getString("userDialog.setting.pin"));
+    private final JButton notesButton = new JButton("Notes");
     private final JCheckBox singleMessage = new JCheckBox(SINGLE_MESSAGE_CHECK);
     private final BanReasons banReasons;
     private final Buttons buttons;
@@ -68,12 +72,15 @@ public class UserInfo extends JDialog {
     
     private final UserInfoRequester requester;
     
+    private final Settings settings;
+    
     public UserInfo(final Window parent, UserInfoListener listener,
             UserInfoRequester requester,
             Settings settings,
             final ContextMenuListener contextMenuListener) {
         super(parent);
         this.requester = requester;
+        this.settings = settings;
         GuiUtil.installEscapeCloseOperation(this);
         banReasons = new BanReasons(this, settings);
         
@@ -83,7 +90,7 @@ public class UserInfo extends JDialog {
             public void actionPerformed(ActionEvent e) {
                 if (settings.getBoolean("closeUserDialogOnAction")
                         && !isPinned()) {
-                    setVisible(false);
+                    dispose();
                 }
                 CustomCommand command = getCommand(e.getSource());
                 if (command == null) {
@@ -100,7 +107,7 @@ public class UserInfo extends JDialog {
 
             @Override
             public void actionPerformed(ActionEvent e) {
-                setVisible(false);
+                dispose();
             }
         };
         closeButton.addActionListener(actionListener);
@@ -114,7 +121,7 @@ public class UserInfo extends JDialog {
         //==========================
         JPanel topPanel = new JPanel(new GridBagLayout());
 
-        gbc = makeGbc(0,0,3,1);
+        gbc = makeGbc(0,0,4,1);
         gbc.insets = new Insets(2, 2, 0, 2);
         topPanel.add(buttons.getPrimary(), gbc);
         
@@ -138,6 +145,19 @@ public class UserInfo extends JDialog {
         topPanel.add(banReasons, gbc);
 
         gbc = makeGbc(2, 1, 1, 1);
+        gbc.weightx = 1;
+        gbc.anchor = GridBagConstraints.EAST;
+        notesButton.setMargin(GuiUtil.SMALL_BUTTON_INSETS);
+        notesButton.addActionListener(e -> {
+            UserNotes.instance().showDialog(currentUser, this, user -> {
+                if (user == currentUser) {
+                    updateStuff(currentUser);
+                }
+            });
+        });
+        topPanel.add(notesButton, gbc);
+        
+        gbc = makeGbc(3, 1, 1, 1);
         gbc.insets = new Insets(2, 8, 2, 8);
         gbc.anchor = GridBagConstraints.EAST;
         pinnedDialog.setToolTipText(Language.getString("userDialog.setting.pin.tip"));
@@ -151,6 +171,12 @@ public class UserInfo extends JDialog {
         //==========================
         // Message log
         //==========================
+        if (parent instanceof MainGui) {
+            pastMessages = new PastMessages(((MainGui) parent).repeatMsg);
+        }
+        else {
+            pastMessages = new PastMessages(null);
+        }
         pastMessages.setRows(4);
         pastMessages.setPreferredSize(pastMessages.getPreferredSize());
         JScrollPane scrollPane = new JScrollPane(pastMessages);
@@ -368,24 +394,49 @@ public class UserInfo extends JDialog {
             currentAutoModMsgId = autoModMsgId;
         }
         currentLocalUsername = localUsername;
-
+        
+        updateStuff(user);
+        
+        updateMessages();
+        infoPanel.update(user);
+        singleMessage.setEnabled(currentMsgId != null);
+        updateButtons();
+        finishDialog();
+    }
+    
+    /**
+     * Update notes (that are user id based) and title (which can change due to
+     * notes changing).
+     * 
+     * @param user 
+     */
+    private void updateStuff(User user) {
+        updateTitle(user, null);
+        if (settings.getBoolean("pronouns")) {
+            Pronouns.instance().getUser((username, pronoun) -> {
+                if (currentUser.getName().equals(username)) {
+                    updateTitle(user, pronoun);
+                }
+            }, user.getName());
+        }
+        notesButton.setText(UserNotes.instance().hasNotes(user) ? "Notes*" : "Notes");
+    }
+    
+    private void updateTitle(User user, String additionalInfo) {
         String categoriesString = "";
         Set<String> categories = user.getCategories();
         if (categories != null && !categories.isEmpty()) {
             categoriesString = categories.toString();
         }
         String displayNickInfo = user.hasDisplayNickSet() ? "" : "*";
+        additionalInfo = StringUtil.append(UserNotes.instance().getChatNotes(user), ", ", additionalInfo);
         this.setTitle(Language.getString("userDialog.title")+" "+user.toString()
                 +(user.hasCustomNickSet() ? " ("+user.getDisplayNick()+")" : "")
                 +(!user.hasRegularDisplayNick() ? " ("+user.getName()+")" : "")
                 +displayNickInfo
+                +(additionalInfo != null ? " ("+additionalInfo+")" : "")
                 +" / "+user.getRoom().getDisplayName()
                 +" "+categoriesString);
-        updateMessages();
-        infoPanel.update(user);
-        singleMessage.setEnabled(currentMsgId != null);
-        updateButtons();
-        finishDialog();
     }
 
     public void show(Component owner, User user, String msgId, String autoModMsgId, String localUsername) {
@@ -400,8 +451,8 @@ public class UserInfo extends JDialog {
         banReasons.reset();
         singleMessage.setSelected(false);
         setUser(user, msgId, autoModMsgId, localUsername);
-        closeButton.requestFocusInWindow();
         setVisible(true);
+        closeButton.requestFocusInWindow();
     }
     
     /**
@@ -465,6 +516,7 @@ public class UserInfo extends JDialog {
             return;
         }
         infoPanel.setChannelInfo(info);
+        updateStuff(currentUser);
     }
     
     protected ChannelInfo getChannelInfo() {

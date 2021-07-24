@@ -17,6 +17,7 @@ import chatty.gui.Highlighter.Match;
 import chatty.gui.components.Channel;
 import chatty.util.api.usericons.Usericon;
 import chatty.gui.components.menus.ContextMenuListener;
+import chatty.gui.components.userinfo.UserNotes;
 import chatty.gui.emoji.EmojiUtil;
 import chatty.util.ChattyMisc;
 import chatty.util.ChattyMisc.CombinedEmotesInfo;
@@ -24,6 +25,7 @@ import chatty.util.DateTime;
 import chatty.util.Debugging;
 import chatty.util.MiscUtil;
 import chatty.util.Pair;
+import chatty.util.RepeatMsgHelper;
 import chatty.util.ReplyManager;
 import chatty.util.RingBuffer;
 import chatty.util.StringUtil;
@@ -31,6 +33,7 @@ import chatty.util.api.CheerEmoticon;
 import chatty.util.api.Emoticon;
 import chatty.util.api.Emoticon.EmoticonImage;
 import chatty.util.api.Emoticon.EmoticonUser;
+import chatty.util.api.Emoticon.ImageType;
 import chatty.util.api.Emoticons;
 import chatty.util.api.Emoticons.TagEmotes;
 import chatty.util.api.pubsub.ModeratorActionData;
@@ -138,10 +141,11 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         IS_BAN_MESSAGE, BAN_MESSAGE_COUNT, TIMESTAMP, USER, IS_USER_MESSAGE,
         URL_DELETED, DELETED_LINE, EMOTICON, IS_APPENDED_INFO, INFO_TEXT, BANS,
         BAN_MESSAGE, ID, ID_AUTOMOD, AUTOMOD_ACTION, USERICON, IMAGE_ID, ANIMATED,
-        APPENDED_INFO_UPDATED, MENTION, USERICON_INFO,
+        APPENDED_INFO_UPDATED, MENTION, USERICON_INFO, GENERAL_LINK,
+        REPEAT_MESSAGE_COUNT,
         
-        HIGHLIGHT_WORD, HIGHLIGHT_LINE, EVEN, PARAGRAPH_SPACING,
-        CUSTOM_BACKGROUND, CUSTOM_FOREGROUND,
+        HIGHLIGHT_WORD, HIGHLIGHT_LINE, HIGHLIGHT_SOURCE, EVEN, PARAGRAPH_SPACING,
+        CUSTOM_BACKGROUND, CUSTOM_FOREGROUND, CUSTOM_COLOR_SOURCE,
         
         IS_REPLACEMENT, REPLACEMENT_FOR, REPLACED_WITH, COMMAND, ACTION_BY,
         ACTION_REASON,
@@ -161,10 +165,11 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         DELETED_MESSAGES_MODE, BAN_DURATION_APPENDED, BAN_REASON_APPENDED,
         BAN_DURATION_MESSAGE, BAN_REASON_MESSAGE,
         
-        ACTION_COLORED, BUFFER_SIZE, AUTO_SCROLL_TIME,
+        ACTION_COLORED, LINKS_CUSTOM_COLOR, BUFFER_SIZE, AUTO_SCROLL_TIME,
         EMOTICON_MAX_HEIGHT, EMOTICON_SCALE_FACTOR, BOT_BADGE_ENABLED,
         FILTER_COMBINING_CHARACTERS, PAUSE_ON_MOUSEMOVE,
-        PAUSE_ON_MOUSEMOVE_CTRL_REQUIRED, EMOTICONS_SHOW_ANIMATED,
+        PAUSE_ON_MOUSEMOVE_CTRL_REQUIRED, EMOTICONS_BTTV_SHOW_ANIMATED,
+        EMOTICONS_ANIMATED,
         SHOW_TOOLTIPS, SHOW_TOOLTIP_IMAGES, BOTTOM_MARGIN,
         
         DISPLAY_NAMES_MODE,
@@ -185,21 +190,31 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
     
     private final javax.swing.Timer updateTimer;
     
-    private final boolean isStreamChat;
-    
-    public ChannelTextPane(MainGui main, StyleServer styleServer) {
-        this(main, styleServer, false, true);
+    public enum Type {
+        REGULAR, STREAM_CHAT, HIGHLIGHTS, IGNORED
     }
     
-    public ChannelTextPane(MainGui main, StyleServer styleServer, boolean isStreamChat, boolean startAtBottom) {
+    private final Type type;
+    
+    public ChannelTextPane(MainGui main, StyleServer styleServer) {
+        this(main, styleServer, Type.REGULAR, true);
+    }
+    
+    public ChannelTextPane(MainGui main, StyleServer styleServer, Type type) {
+        this(main, styleServer, type, true);
+    }
+
+    public ChannelTextPane(MainGui main, StyleServer styleServer, Type type, boolean startAtBottom) {
         getAccessibleContext().setAccessibleName("Chat Output");
         getAccessibleContext().setAccessibleDescription("");
         lineSelection = new LineSelection(main.getUserListener());
         this.styleServer = styleServer;
         this.main = main;
+        this.type = type;
         this.setBackground(BACKGROUND_COLOR);
         this.addMouseListener(linkController);
         this.addMouseMotionListener(linkController);
+        linkController.setType(type);
         linkController.addUserListener(main.getUserListener());
         linkController.addUserListener(lineSelection);
         linkController.setUserHoverListener(user -> setHoveredUser(user));
@@ -221,7 +236,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
 
             @Override
             public void actionPerformed(ActionEvent e) {
-                if (isStreamChat) {
+                if (type == Type.STREAM_CHAT) {
                     removeOldLines();
                 }
                 removeAbandonedModLogInfo();
@@ -231,7 +246,6 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         updateTimer.start();
         
         FixSelection.install(this);
-        this.isStreamChat = isStreamChat;
         
         if (Chatty.DEBUG) {
             addCaretListener(new CaretListener() {
@@ -571,12 +585,23 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
                 message.replaceMatches, message.replacement, message.tags);
         
         if (message.highlighted) {
-            setLineHighlighted(doc.getLength());
+            setLineHighlighted(doc.getLength(), message.highlightSource);
         }
-        if (message.backgroundColor != null) {
-            setCustomBackgroundColor(doc.getLength(), message.backgroundColor);
+        else if (type == Type.IGNORED) {
+            // For ignored messages, the "highlight" refers to what was ignored
+            setLineHighlightSource(doc.getLength(), message.highlightSource);
+        }
+        if (message.backgroundColor != null || message.color != null) {
+            setCustomColor(doc.getLength(), message.backgroundColor, message.colorSource);
         }
         finishLine();
+        
+        int repeatMsg = RepeatMsgHelper.getRepeatMsg(message.tags);
+        if (repeatMsg > 1) {
+            changeInfo(getLastLine(doc), (attributes) -> {
+                attributes.addAttribute(Attribute.REPEAT_MESSAGE_COUNT, repeatMsg);
+            });
+        }
         
         lastUsers.add(new MentionCheck(user));
     }
@@ -631,10 +656,13 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         //-----------------
         if (!message.isHidden()) {
             if (message.highlighted) {
-                setLineHighlighted(doc.getLength());
+                setLineHighlighted(doc.getLength(), message.highlightSource);
             }
-            if (message.bgColor != null) {
-                setCustomBackgroundColor(doc.getLength(), message.bgColor);
+            else if (type == Type.IGNORED) {
+                setLineHighlightSource(doc.getLength(), message.highlightSource);
+            }
+            if (message.bgColor != null || message.color != null) {
+                setCustomColor(doc.getLength(), message.bgColor, message.colorSource);
             }
         }
     }
@@ -643,6 +671,11 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         closeCompactMode();
         printTimestamp(style);
         printSpecialsInfo(message.text, style, message.highlightMatches);
+        Pair<String, String> link = message.getLink();
+        if (link != null) {
+            print(" ", style);
+            print(link.key, styles.generalLink(style, link.value));
+        }
         finishLine();
     }
     
@@ -900,6 +933,11 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             // Make text based on current attributes
             //---------------------------------------
             String text = "";
+            Integer repeatMsgCount = (Integer)attributes.getAttribute(Attribute.REPEAT_MESSAGE_COUNT);
+            if (repeatMsgCount != null && repeatMsgCount > 1) {
+                text += String.format("(x%d)", repeatMsgCount);
+            }
+            
             Integer banCount = (Integer)attributes.getAttribute(Attribute.BAN_MESSAGE_COUNT);
             if (banCount != null && banCount > 1) {
                 text += String.format("(%d)", banCount);
@@ -1330,15 +1368,27 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         doc.setParagraphAttributes(offset, 1, styles.variableLineAttributes(even, updateTimestamp), false);
     }
     
-    private void setLineHighlighted(int offset) {
+    private void setLineHighlighted(int offset, Object source) {
         SimpleAttributeSet attr = new SimpleAttributeSet();
         attr.addAttribute(Attribute.HIGHLIGHT_LINE, true);
+        attr.addAttribute(Attribute.HIGHLIGHT_SOURCE, source);
         doc.setParagraphAttributes(offset, 1, attr, false);
     }
     
-    private void setCustomBackgroundColor(int offset, Color color) {
+    private void setLineHighlightSource(int offset, Object source) {
+        if (source != null) {
+            SimpleAttributeSet attr = new SimpleAttributeSet();
+            attr.addAttribute(Attribute.HIGHLIGHT_SOURCE, source);
+            doc.setParagraphAttributes(offset, 1, attr, false);
+        }
+    }
+    
+    private void setCustomColor(int offset, Color backgroundColor, Object source) {
         SimpleAttributeSet attr = new SimpleAttributeSet();
-        attr.addAttribute(Attribute.CUSTOM_BACKGROUND, color);
+        if (backgroundColor != null) {
+            attr.addAttribute(Attribute.CUSTOM_BACKGROUND, backgroundColor);
+        }
+        attr.addAttribute(Attribute.CUSTOM_COLOR_SOURCE, source);
         doc.setParagraphAttributes(offset, 1, attr, false);
     }
     
@@ -1719,6 +1769,10 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         @Override
         public void usericonClicked(Usericon usericon, MouseEvent e) {
         }
+
+        @Override
+        public void linkClicked(Channel channel, String link) {
+        }
         
     }
     
@@ -1878,9 +1932,20 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             }
         }
         
+        String addition = null;
+        
         // Add username in parentheses behind, if necessary
         if (!user.hasRegularDisplayNick() && !user.hasCustomNickSet()
                 && styles.namesMode() == SettingsManager.DISPLAY_NAMES_MODE_BOTH) {
+            addition = user.getName();
+        }
+        
+        String notes = UserNotes.instance().getNotesForChat(user);
+        if (notes != null) {
+            addition = StringUtil.append(addition, ", ", notes);
+        }
+        
+        if (addition != null) {
             MutableAttributeSet style = styles.messageUser(user, msgId, background);
             StyleConstants.setBold(style, false);
             int fontSize = StyleConstants.getFontSize(style) - 2;
@@ -1888,7 +1953,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
                 fontSize = StyleConstants.getFontSize(style);
             }
             StyleConstants.setFontSize(style, fontSize);
-            print(" ("+user.getName()+")", style);
+            print(" ("+addition+")", style);
         }
         
         // Finish up
@@ -1970,7 +2035,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
      */
     private void printUserIcons(User user, boolean pointsHl) {
         boolean botBadgeEnabled = styles.isEnabled(Setting.BOT_BADGE_ENABLED);
-        java.util.List<Usericon> badges = user.getBadges(botBadgeEnabled, pointsHl, isStreamChat);
+        java.util.List<Usericon> badges = user.getBadges(botBadgeEnabled, pointsHl, type == Type.STREAM_CHAT);
         if (badges != null) {
             for (Usericon badge : badges) {
                 if (badge.image != null && !badge.removeBadge) {
@@ -2188,7 +2253,8 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         TreeMap<Integer,Integer> ranges = new TreeMap<>();
         HashMap<Integer,MutableAttributeSet> rangesStyle = new HashMap<>();
         
-        findLinks(text, ranges, rangesStyle, style);
+        findLinks(text, ranges, rangesStyle, styles.isEnabled(Setting.LINKS_CUSTOM_COLOR)
+                                                 ? style : styles.info());
         
         if (styles.isEnabled(Setting.MENTIONS_INFO)) {
             findMentions(text, ranges, rangesStyle, style, Setting.MENTIONS_INFO);
@@ -2222,7 +2288,8 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         applyReplacements(text, replacements, replacement, ranges, rangesStyle);
         
         if (!ignoreLinks) {
-            findLinks(text, ranges, rangesStyle, styles.standard());
+            findLinks(text, ranges, rangesStyle, styles.isEnabled(Setting.LINKS_CUSTOM_COLOR)
+                                                 ? style : styles.standard());
         }
         
         if (styles.isEnabled(Setting.EMOTICONS_ENABLED)) {
@@ -2495,7 +2562,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         
         // Channel based (may also have a emoteset restriction)
         HashSet<Emoticon> channelEmotes = main.emoticons.getEmoticonsByStream(user.getStream());
-        findEmoticons(user, channelEmotes, text, ranges, rangesStyle);
+        findEmoticons(user, channelEmotes, text, ranges, rangesStyle, accessToSets);
         
         // Special Combined Emotes
         CombinedEmotesInfo cei = ChattyMisc.getCombinedEmotesInfo();
@@ -2611,7 +2678,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
                          * Add emote from message alone
                          */
                         String code = text.substring(start, end+1);
-                        String url = Emoticon.getTwitchEmoteUrlById(id, 1);
+                        String url = Emoticon.getTwitchEmoteUrlById(id, 1, styles.emoticonImageType());
                         Emoticon.Builder b = new Emoticon.Builder(
                                 Emoticon.Type.TWITCH, code, url);
                         b.setStringId(id);
@@ -2657,7 +2724,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
                 continue;
             }
             if (emoticon.isAnimated()
-                    && !styles.isEnabled(Setting.EMOTICONS_SHOW_ANIMATED)) {
+                    && !styles.isEnabled(Setting.EMOTICONS_BTTV_SHOW_ANIMATED)) {
                 continue;
             }
             Matcher m = emoticon.getMatcher(text);
@@ -3529,9 +3596,11 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             addSetting(Setting.BOT_BADGE_ENABLED, true);
             addSetting(Setting.PAUSE_ON_MOUSEMOVE, true);
             addSetting(Setting.PAUSE_ON_MOUSEMOVE_CTRL_REQUIRED, false);
-            addSetting(Setting.EMOTICONS_SHOW_ANIMATED, false);
+            addSetting(Setting.EMOTICONS_BTTV_SHOW_ANIMATED, false);
+            addSetting(Setting.EMOTICONS_ANIMATED, false);
             addSetting(Setting.SHOW_TOOLTIPS, true);
             addSetting(Setting.SHOW_TOOLTIP_IMAGES, true);
+            addSetting(Setting.LINKS_CUSTOM_COLOR, true);
             addNumericSetting(Setting.MENTIONS, 0, 0, 200);
             addNumericSetting(Setting.MENTIONS_INFO, 0, 0, 200);
             addNumericSetting(Setting.MENTION_MESSAGES, 0, 0, 200);
@@ -3678,6 +3747,13 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
                 return specialColor;
             }
             return info();
+        }
+        
+        public MutableAttributeSet generalLink(AttributeSet base, String target) {
+            SimpleAttributeSet result = new SimpleAttributeSet(base);
+            result.addAttribute(Attribute.GENERAL_LINK, target);
+            StyleConstants.setUnderline(result, true);
+            return result;
         }
         
         public MutableAttributeSet compact() {
@@ -3892,14 +3968,19 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
                 if (icon != null && icon.image != null) {
                     StyleConstants.setIcon(style, addSpaceToIcon(icon.image));
                     style.addAttribute(Attribute.USERICON, icon);
-                    if (icon.type == Usericon.Type.TWITCH
-                            && Usericon.typeFromBadgeId(icon.badgeType.id) == Usericon.Type.SUB
-                            && user != null
-                            && user.getSubMonths() > 0) {
-                        style.addAttribute(Attribute.USERICON_INFO, DateTime.formatMonthsVerbose(user.getSubMonths()));
-                    }
                 }
                 savedIcons.put(icon, style);
+            }
+            // Update per-user information every time
+            if (icon.type == Usericon.Type.TWITCH
+                    && (Usericon.typeFromBadgeId(icon.badgeType.id) == Usericon.Type.SUB
+                    || Usericon.typeFromBadgeId(icon.badgeType.id) == Usericon.Type.FOUNDER)
+                    && user != null
+                    && user.getSubMonths() > 0) {
+                style.addAttribute(Attribute.USERICON_INFO, DateTime.formatMonthsVerbose(user.getSubMonths()));
+            }
+            else {
+                style.removeAttribute(Attribute.USERICON_INFO);
             }
             return style;
         }
@@ -3956,13 +4037,17 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             // Does this need any other attributes e.g. standard?
             SimpleAttributeSet emoteStyle = new SimpleAttributeSet();
             EmoticonImage emoteImage = emoticon.getIcon(
-                    emoticonScaleFactor(), emoticonMaxHeight(), ChannelTextPane.this);
+                    emoticonScaleFactor(), emoticonMaxHeight(), emoticonImageType(), ChannelTextPane.this);
             StyleConstants.setIcon(emoteStyle, emoteImage.getImageIcon());
             
             emoteStyle.addAttribute(Attribute.EMOTICON, emoteImage);
             emoteStyle.addAttribute(Attribute.IMAGE_ID, idCounter.getAndIncrement());
             emoteStyle.addAttribute(Attribute.ANIMATED, emoticon.isAnimated());
             return emoteStyle;
+        }
+        
+        public ImageType emoticonImageType() {
+            return Emoticon.makeImageType(isEnabled(Setting.EMOTICONS_ANIMATED));
         }
         
         public SimpleDateFormat timestampFormat() {

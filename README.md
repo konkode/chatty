@@ -47,7 +47,7 @@ to whatever license terms it is under (like retaining copyright notices) and to
 detail that in the Pull Request.
 
 Obviously, I won't be able to accept all contributions, for example I may
-already be working on something similiar. If you plan to put more than a little
+already be working on something similar. If you plan to put more than a little
 effort into a Pull Request, consider asking first if what you're doing has a
 chance of being added.
 
@@ -151,7 +151,7 @@ Images / Other
 		go-previous.png, go-home.png, go-web.png,
 		image-icon.png, commandline.png, edit-copy.png, sort.png,
 		edit-all.png (edited), reply.png (edited)`
-  * Source: <http://tango.freedesktop.org>/Tango_Icon_Library
+  * Source: <http://tango.freedesktop.org/Tango_Icon_Library>
   * License: Released into the Public Domain
 
 * Misc Icons from NUVOLA ICON THEME for KDE 3.x

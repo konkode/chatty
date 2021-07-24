@@ -29,6 +29,7 @@ import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -37,6 +38,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.swing.*;
 import javax.swing.tree.DefaultMutableTreeNode;
 
@@ -57,11 +60,12 @@ public class SettingsDialog extends JDialog implements ActionListener {
             "ffz", "nod3d", "noddraw",
             "userlistWidth", "userlistMinWidth", "userlistEnabled",
             "capitalizedNames", "correctlyCapitalizedNames", "ircv3CapitalizedNames",
-            "tabOrder", "tabsMwheelScrolling", "tabsMwheelScrollingAnywhere", "inputFont",
+            "inputFont",
             "bttvEmotes", "botNamesBTTV", "botNamesFFZ", "ffzEvent",
             "logPath", "logTimestamp", "logSplit", "logSubdirectories",
-            "tabsPlacement", "tabsLayout", "logLockFiles", "logMessageTemplate",
-            "laf", "lafTheme", "lafFontScale", "language", "timezone"
+            "logLockFiles", "logMessageTemplate",
+            "laf", "lafTheme", "lafFontScale", "language", "timezone",
+            "userDialogMessageLimit"
     ));
     
     private final Set<String> reconnectRequiredDef = new HashSet<>(Arrays.asList(
@@ -94,6 +98,10 @@ public class SettingsDialog extends JDialog implements ActionListener {
     private final ImageSettings imageSettings;
     private final HotkeySettings hotkeySettings;
     private final NameSettings nameSettings;
+    private final HighlightSettings highlightSettings;
+    private final IgnoreSettings ignoreSettings;
+    
+    private final MatchingPresets matchingPresets;
     
     public enum Page {
         MAIN("Main", Language.getString("settings.page.main")),
@@ -250,8 +258,10 @@ public class SettingsDialog extends JDialog implements ActionListener {
         cards.add(new LookSettings(this), Page.LOOK.name);
         cards.add(new FontSettings(this), Page.FONTS.name);
         cards.add(new ColorSettings(this, settings), Page.CHATCOLORS.name);
-        cards.add(new HighlightSettings(this), Page.HIGHLIGHT.name);
-        cards.add(new IgnoreSettings(this), Page.IGNORE.name);
+        highlightSettings = new HighlightSettings(this);
+        cards.add(highlightSettings, Page.HIGHLIGHT.name);
+        ignoreSettings = new IgnoreSettings(this);
+        cards.add(ignoreSettings, Page.IGNORE.name);
         cards.add(new FilterSettings(this), Page.FILTER.name);
         msgColorSettings = new MsgColorSettings(this);
         cards.add(msgColorSettings, Page.MSGCOLORS.name);
@@ -274,7 +284,9 @@ public class SettingsDialog extends JDialog implements ActionListener {
         nameSettings = new NameSettings(this);
         cards.add(nameSettings, Page.NAMES.name);
         cards.add(new StreamSettings(this), Page.STREAM.name);
-
+        
+        matchingPresets = new MatchingPresets(this);
+        
         // Track current settings page
         currentlyShown = Page.MAIN;
         selection.addTreeSelectionListener(e -> {
@@ -401,6 +413,15 @@ public class SettingsDialog extends JDialog implements ActionListener {
                     showPanel(Page.USERICONS);
                     Usericon icon = (Usericon)parameter;
                     imageSettings.addUsericonOfBadgeType(icon.type, icon.badgeType.id);
+                } else if (action.equals("selectHighlight")) {
+                    showPanel(Page.HIGHLIGHT);
+                    highlightSettings.selectItem((String) parameter);
+                } else if (action.equals("selectIgnore")) {
+                    showPanel(Page.IGNORE);
+                    ignoreSettings.selectItem((String) parameter);
+                } else if (action.equals("selectMsgColor")) {
+                    showPanel(Page.MSGCOLORS);
+                    msgColorSettings.selectItem((String) parameter);
                 }
             }
         });
@@ -594,6 +615,11 @@ public class SettingsDialog extends JDialog implements ActionListener {
                 settings.setSettingChanged(settingName);
             }
         }
+    }
+    
+    protected void showMatchingPresets() {
+        matchingPresets.setLocationRelativeTo(this);
+        matchingPresets.setVisible(true);
     }
     
     protected static GridBagConstraints makeGbc(int x, int y, int w, int h) {
@@ -856,7 +882,7 @@ public class SettingsDialog extends JDialog implements ActionListener {
     }
     
     protected SimpleTableEditor addStringMapSetting(String name, int width, int height) {
-        SimpleTableEditor<String> table = new SimpleTableEditor<String>(this) {
+        SimpleTableEditor<String> table = new SimpleTableEditor<String>(this, String.class) {
 
             @Override
             protected String valueFromString(String input) {
@@ -869,15 +895,66 @@ public class SettingsDialog extends JDialog implements ActionListener {
     }
     
     protected SimpleTableEditor addLongMapSetting(String name, int width, int height) {
-        SimpleTableEditor<Long> table = new SimpleTableEditor<Long>(this) {
+        SimpleTableEditor<Long> table = new SimpleTableEditor<Long>(this, Long.class) {
 
             @Override
             protected Long valueFromString(String input) {
-                return Long.valueOf(input);
+                try {
+                    return Long.valueOf(input);
+                }
+                catch (NumberFormatException ex) {
+                    return (long)0;
+                }
             }
         };
         table.setValueFilter("[^0-9]");
         table.setPreferredSize(new Dimension(width, height));
+        table.setTableEditorEditAllHandler(new TableEditor.TableEditorEditAllHandler<SimpleTableEditor.MapItem<Long>>() {
+            
+            private final Pattern PARSE_LINE = Pattern.compile("(.*) (-?[0-9]+)");
+            
+            @Override
+            public String toString(List<SimpleTableEditor.MapItem<Long>> data) {
+                StringBuilder b = new StringBuilder();
+                for (SimpleTableEditor.MapItem<Long> entry : data) {
+                    b.append(entry.key).append(" ").append(entry.value).append("\n");
+                }
+                return b.toString();
+            }
+
+            @Override
+            public List<SimpleTableEditor.MapItem<Long>> toData(String input) {
+                List<SimpleTableEditor.MapItem<Long>> result = new ArrayList<>();
+                String[] split = StringUtil.splitLines(input);
+                for (String line : split) {
+                    Matcher m = PARSE_LINE.matcher(line);
+                    if (m.matches()) {
+                        try {
+                            result.add(new SimpleTableEditor.MapItem(m.group(1), Long.valueOf(m.group(2))));
+                        }
+                        catch (NumberFormatException ex) {
+                            // Don't add
+                        }
+                    }
+                }
+                return result;
+            }
+
+            @Override
+            public StringEditor getEditor() {
+                return null;
+            }
+
+            @Override
+            public String getEditorTitle() {
+                return "Edit all entries";
+            }
+
+            @Override
+            public String getEditorHelp() {
+                return null;
+            }
+        });
         mapSettings.put(name, table);
         return table;
     }
@@ -913,6 +990,7 @@ public class SettingsDialog extends JDialog implements ActionListener {
     private void close() {
         owner.hotkeyManager.setEnabled(true);
         setVisible(false);
+        dispose();
     }
     
     protected LinkLabelListener getLinkLabelListener() {

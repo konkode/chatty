@@ -24,7 +24,7 @@ import java.util.Set;
  * @author tduva
  */
 public class User implements Comparable<User> {
-    
+
     private static final NamedColor[] defaultColors = {
         new NamedColor("Red", 255, 0, 0),
         new NamedColor("Blue", 0, 0, 255),
@@ -43,7 +43,9 @@ public class User implements Comparable<User> {
         new NamedColor("SpringGreen", 0, 255, 127)
     };
     
-    private static final int MAXLINES = 100;
+    public static volatile int MSG_ID;
+    
+    private int maxLines = 100;
     
     //========
     // Basics
@@ -306,7 +308,11 @@ public class User implements Comparable<User> {
     }
     
     public synchronized int getMaxNumberOfLines() {
-        return MAXLINES;
+        return maxLines;
+    }
+    
+    public synchronized void setMaxNumberOfLines(int num) {
+        this.maxLines = num;
     }
     
     /**
@@ -316,7 +322,7 @@ public class User implements Comparable<User> {
      * @return 
      */
     public synchronized boolean linesCleared() {
-        return lines.size() < MAXLINES && lines.size() < numberOfLines;
+        return lines.size() < maxLines && lines.size() < numberOfLines;
     }
     
     /**
@@ -327,7 +333,7 @@ public class User implements Comparable<User> {
      * @return 
      */
     public synchronized boolean maxLinesExceeded() {
-        return lines.size() == MAXLINES && lines.size() < numberOfLines;
+        return lines.size() == maxLines && lines.size() < numberOfLines;
     }
     
     /**
@@ -376,7 +382,7 @@ public class User implements Comparable<User> {
     
     public synchronized void addModAction(ModeratorActionData data) {
         setFirstSeen();
-        addLine(new ModAction(System.currentTimeMillis(), data.getCommandAndParameters()));
+        addLine(new ModAction(System.currentTimeMillis(), data.moderation_action+" "+ModLogInfo.makeArgsText(data)));
     }
     
     private List<ModeratorActionData> cachedBanInfo;
@@ -465,7 +471,7 @@ public class User implements Comparable<User> {
      */
     private void addLine(Message line) {
         lines.add(line);
-        if (lines.size() > MAXLINES) {
+        if (lines.size() > maxLines) {
             lines.remove(0);
         }
         numberOfLines++;
@@ -479,6 +485,28 @@ public class User implements Comparable<User> {
      */
     public synchronized List<Message> getMessages() {
         return new ArrayList<>(lines);
+    }
+    
+    public synchronized int getNumberOfSimilarChatMessages(String compareMsg, int method, long timeframe, float minSimilarity, int minLen, char[] ignoredChars) {
+        compareMsg = StringUtil.prepareForSimilarityComparison(compareMsg, ignoredChars);
+        int result = 0;
+        long checkUntilTime = System.currentTimeMillis() - timeframe * 1000;
+        for (int i=lines.size() - 1; i>=0; i--) {
+            Message m = lines.get(i);
+            if (m instanceof TextMessage) {
+                TextMessage msg = (TextMessage)m;
+                if (msg.getTime() < checkUntilTime) {
+                    break;
+                }
+                if (msg.text.length() >= minLen) {
+                    String text = StringUtil.prepareForSimilarityComparison(msg.text, ignoredChars);
+                    if (StringUtil.checkSimilarity(compareMsg, text, minSimilarity, method) > 0) {
+                        result++;
+                    }
+                }
+            }
+        }
+        return result;
     }
     
     public synchronized TextMessage getMessage(String msgId) {
@@ -676,6 +704,22 @@ public class User implements Comparable<User> {
             return correctedColor;
         }
         return color;
+    }
+    
+    /**
+     * Only return custom or corrected color.
+     * 
+     * @return The color, or null if no custom or corrected color is set
+     */
+    public synchronized Color getDisplayColor2() {
+        Color color = getColor();
+        if (hasCustomColor) {
+            return color;
+        }
+        if (hasCorrectedColor) {
+            return correctedColor;
+        }
+        return null;
     }
     
     /**
@@ -1169,6 +1213,9 @@ public class User implements Comparable<User> {
     
     public static class ModAction extends Message {
 
+        /**
+         * For display, may be formatted differently depending on the command.
+         */
         public final String commandAndParameters;
         
         public ModAction(long time, String commandAndParameters) {

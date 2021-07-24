@@ -5,13 +5,14 @@
         <link rel="stylesheet" type="text/css" href="style.css" />
 </head>
 <body>
-    <h1><a name="top">Chatty (Version: 0.13-kon)</a></h1>
+    <h1><a name="top">Chatty (Version: 0.15-kon)</a></h1>
     <table>
         <tr>
             <td valign="top">
                 <strong>General usage</strong>
                 <ul class="menu">
                     <li><a href="#title">Title and Tabs</a></li>
+                    <li><a href="#layouts">Layouts and Tabs</a></li>
                     <li><a href="#shortcuts">Hotkeys</a></li>
                     <li><a href="#commands">Commands</a></li>
                     <li><a href="#login">Twitch Login</a></li>
@@ -50,7 +51,7 @@
                     <li><a href="#channelinfo">Channel Info / History</a></li>
                     <li><a href="#notifications">Live Streams / Notifications</a></li>
                     <li><a href="help-admin.html">Admin Dialog</a></li>
-                    <li><a href="help-livestreamer.html">Livestreamer / Streamlink</a>
+                    <li><a href="help-livestreamer.html">Streamlink</a>
                     <li><a href="help-srl.html">SpeedrunsLive (SRL)</a></li>
                     <li><a href="#followers">Followers/Subscribers List</a></li>
                     <li><a href="#streamhighlights">Stream Highlights / Markers</a></li>
@@ -121,12 +122,97 @@
         <li><code>R9k</code> for R9Kbeta Mode</li>
         <li><code>EmoteOnly</code> for Emote-Only Mode</li>
         <li>A language code if Broadcaster Language Mode is enabled</li>
+        <li><code>[FM]</code> indicates a websocket connection (<code>F</code>
+            for FrankerFaceZ, <code>M</code> for PubSub/Modlogs)</li>
     </ul>
     <p>You can toggle showing some information under <code>View - Options - Titlebar</code>.</p>
     
     <p>Note that the stream status (title/game, offline) can take a few minutes
         to update, since it has to be requested from the Twitch API (which is
         also heavily cached).</p>
+    
+    <h2>
+        <a name="layouts">Layouts and Tabs</a>
+        <a href="#top" class="top">[back to menu]</a>
+    </h2>
+    <p>A layout is the arrangement of tabs in the Chatty window and popouts,
+        which can be saved and restored later. Other GUI elements that aren't a
+        tab (e.g. the Settings Dialog or Emotes Dialog) are not considered a
+        part of a layout in this sense, so their location and size is determined
+        in other ways.</p>
+    
+    <p>You can open several tabs, which can be of basicially two different types:</p>
+    <ul>
+        <li>Channels and Whisper Tabs, which open as tabs by default.</li>
+        <li>Docked Dialogs, which open as a separate dialog by default, but can
+            be docked as a tab through their context menu (usually right-click).
+            This includes for example the Channel Info, Admin Panel and more.
+            <br /><br />
+            Note that these will only be considered as being part of the layout
+            when in their docked state. When not docked, these dialogs will use
+            the old system, which is affected by the settings under "Main - Settings - Window - Dialogs Location/Size".</li>
+    </ul>
+    <p>You can use drag&amp;drop on tabs in various ways:</p>
+    <ul>
+        <li>Move a tab within the same tab pane to change their order.</li>
+        <li>Move a tab to another tab pane.</li>
+        <li>Drop a tab in the middle of another tab pane to move it to that tab
+            pane.</li>
+        <li>Drop a tab on the side of another tab pane to create a split pane,
+            containing two tab panes side-by-side.</li>
+        <li>Drop a tab outside of any Chatty window to open it in a popout
+            (depending on the settings under "Main - Settings - Tabs").</li>
+    </ul>
+    <p>You can also open the tab context menu (right-click) to perform various
+        actions such as opening a popout or closing the tab.</p>
+    
+    <h3><a name="layouts-save-load">Save and Load Layouts</a></h3>
+    <p>You can save the current tabs, splits and popouts in a layout under
+        "View - Layouts". Saving a layout is a snapshot of the current state, so
+        if you make any changes that you wish to be saved, you'll have to save
+        it again (add a new layout or overwrite an existing one).</p>
+    
+    <p>If enabled ("Main - Settings - Main") the layout will automatically be
+        restored when restarting Chatty, which is separate from saving layouts
+        manually.</p>
+    
+    <p>Aside from loading layouts through the menu, you can also use commands:</p>
+    
+    <dl class="dl-settings">
+        <dt><code>/layouts add &lt;name&gt;</code></dt>
+        <dd>Add a new layout with the current state. If the layout already
+            exists, you will be asked whether you want to overwrite it. Example:
+            <code>/layouts add abc</code></dd>
+        
+        <dt><code>/layouts save &lt;name&gt;</code></dt>
+        <dd>Adds a new layout with the current state or overwrites it if the
+            layout already exists (without asking).</dd>
+        
+        <dt><code>/layouts remove &lt;name&gt;</code></dt>
+        <dd>Removes the given layout.</dd>
+        
+        <dt><code>/layouts load [-clm] &lt;name&gt;</code></dt>
+        <dd>Loads the given layout.</dd>
+        <dd>If no options are given (e.g. <code>/layouts load abc</code>) it
+            will open the load layout dialog.</dd>
+        <dd>Options can be given to define how to load the layout, which also
+            loads the layout immediately without showing the dialog. The options
+            are equivalent to what you can select in the dialog:
+            <ul>
+                <li><code>c</code> to keep the current channels open</li>
+                <li><code>l</code> to open the channels from the layout</li>
+                <li><code>m</code> to load the main window location/size</li>
+            </ul>
+            For example <code>/layouts load -c abc</code> keeps the current channels
+            open, but does not join the channels in the layout. The options can
+            also be empty, for example <code>/layouts load - abc</code> will not
+            open any channels or keep any channels open (but the rest of the
+            layout such as docked dialogs is still loaded).
+        </dd>
+        <dd>You can use <code>/layouts load -- -abc</code> if your layout name
+            begins with a <code>-</code> (in this case "-abc"), which opens the
+            dialog just as if you hadn't provided any options at all.</dd>
+    </dl>
     
     <h2>
         <a name="shortcuts">Hotkeys</a>
@@ -174,7 +260,8 @@
     
     <h3><a name="commands-chat">Chat commands:</a></h3>
     <ul>
-	<li><code>/me &lt;message&gt;</code> - Send an action message (* nickname says something) to the channel</li>
+        <li><code>/say &lt;message&gt;</code> - Send a regular chat message, alternative to just entering the text (it being a command can be useful in some cases, e.g. if you want to ensure that a message starting with a replacement can't trigger another command or to use an <a href="help-custom_commands.html#anonymous-custom-commands">Anonymous Custom Command</a> using <code>//say</code>)</li>
+	<li><code>/me &lt;message&gt;</code> - Send an action message (* nickname says something)</li>
         <li><code>/msgreply &lt;message&gt;</code> - Send a reply to a specific message, only works when added to the User Context Menu or User Dialog
             in the Commands settings (e.g. <code>Reply=/msgreply $$input(Reply to $(nick))</code>)</li>
 	<li><code>/to &lt;nick&gt; [time] [reason]</code> - Timeout the user with the given nickname for "time" seconds (time is optional)</li>
@@ -240,6 +327,7 @@
         <li><code>/openFile &lt;path&gt;</code> - Opens the given path in the default application</li>
         <li><code>/openFilePrompt &lt;path&gt;</code> - Opens the given path in the default application (with prompt asking for confirmation)</li>
         <li><code>/setSize &lt;width&gt; &lt;height&gt;</code> - Sets the main window size</li>
+        <li><a href="#layouts-save-load">Save and load layouts</a></li>
     </ul>
     
     <h3><a name="commands-system">Housekeeping/System commands:</a></h3>
@@ -307,6 +395,40 @@
         
         <dt><code>/chain /echo a | /echo ||b||</code></dt>
         <dd>Outputs <code>a</code> and <code>|b|</code></dd>
+    </dl>
+    
+    <p>When using <code>/chain</code> with <a href="help-custom_commands.html">Custom Command</a>
+        replacements, consider the following:</p>
+    
+    <dl class="defList">
+        <dt><code>/chain /echo $(msg) | /echo abc</code></dt>
+        <dd>All replacements are performed before the <code>/chain</code>
+            command is executed, so anything in <code>$(msg)</code> is put in
+            first. If <code>$(msg)</code> contained <code>Hello World!</code>:<br />
+            <code>/chain /echo Hello World! | /echo abc</code></dd>
+        <dd>This means that if a replacement contains a <code>|</code> character
+            it would add an additional command. If <code>$(msg)</code> contained <code>Hello | World!</code>, then <code>World!</code> would be
+            separately entered into the inputbox (so it would output two <code>/echo</code>
+            info messages and send <code>World!</code> to chat):<br />
+            <code>/chain /echo Hello | World! | /echo abc</code></dd>
+        <dd>Since this could cause issues, any top-level replacement will escape
+            the <code>|</code> character automatically if the Custom Command
+            begins with the <code>/chain</code> command (so it would output
+            <code>Hello | World!</code> and <code>abc</code>):<br />
+            <code>/chain /echo Hello || World! | /echo abc</code></dd>
+        <dd>You can prevent this automatic escaping (if you are absolutely sure that
+            you want replacements to be able to insert any command) by adding
+            a backslash in front (this doesn't work when you enter the <code>/chain</code>
+            command directly into the inputbox):<br />
+            <code>\/chain /echo Hello | World! | /echo abc</code></dd>
+        
+        <dt><code>/chain /echo abc $(chain-test)</code></dt>
+        <dd>You can test this by using the <code>$(chain-test)</code> replacement.
+            This should (if e.g. added in the body of a Custom Command) output the following info message:<br />
+            <code>abc | /echo Test || Message</code></dd>
+        <dd>If you add a backslash in front, it will output two info messages:<br />
+            <code>abc</code><br />
+            <code>Test | Message</code></dd>
     </dl>
     
     <h2>
@@ -1429,7 +1551,7 @@ MiniK   http://static-cdn.jtvnw.net/emoticons/v1/25/1.0     set:793 id:3287</pre
     </h2>
     <p>Using the <code>/proc</code> command you can start processes directly out
         of Chatty. An example of where this is already integrated into Chatty is
-        starting Livestreamer, however this is a more basic implementation.
+        starting Streamlink, however this is a more basic implementation.
         <em>This is probably only interesting for advanced users.</em></p>
     
     <ul>

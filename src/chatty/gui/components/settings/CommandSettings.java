@@ -64,15 +64,7 @@ public class CommandSettings extends SettingsPanel {
                 return input.trim();
             }
         });
-        items.setTester(new Editor.Tester() {
-
-            @Override
-            public String test(Window parent, Component component, int x, int y, String value) {
-                CustomCommand command = CustomCommands.parseCommandWithName(value);
-                showCommandInfoPopup(component, command);
-                return null;
-            }
-        });
+        items.setTester(createCommandTester());
         items.setInfo(INFO_COMMANDS);
         items.setInfoLinkLabelListener(d.getLinkLabelListener());
         gbc.fill = GridBagConstraints.BOTH;
@@ -142,6 +134,7 @@ public class CommandSettings extends SettingsPanel {
         addSetting("timeoutButtons", "userDialog", 3, menus, userDialogTester);
         addSetting("textContextMenu", "textMenu", 4, menus, menuTester);
         addSetting("adminContextMenu", "adminMenu", 5, menus, menuTester);
+        menus.add(d.addSimpleBooleanSetting("menuCommandLabels"), SettingsDialog.makeGbc(0, 6, 2, 1, GridBagConstraints.WEST));
     }
     
     private void addSetting(String settingName, String infoName, int y, JPanel panel, Editor.Tester tester) {
@@ -158,6 +151,18 @@ public class CommandSettings extends SettingsPanel {
         label.setLabelFor(setting);
         setting.setLinkLabelListener(d.getLinkLabelListener());
         panel.add(setting, gbc);
+    }
+    
+    public static Editor.Tester createCommandTester() {
+        return new Editor.Tester() {
+
+            @Override
+            public String test(Window parent, Component component, int x, int y, String value) {
+                CustomCommand command = CustomCommands.parseCommandWithName(value);
+                showCommandInfoPopup(component, command);
+                return null;
+            }
+        };
     }
     
     public static void showCommandInfoPopup(Component parent, CustomCommand command) {
@@ -185,6 +190,9 @@ public class CommandSettings extends SettingsPanel {
     }
     
     public static String formatCommandInfo(String input) {
+        if (input == null) {
+            return "<em>Empty</em>";
+        }
         return Helper.htmlspecialchars_encode(input)
                 .replace("\n", "<br>").replace(" ", "&nbsp;");
     }

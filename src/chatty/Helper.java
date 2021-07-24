@@ -10,8 +10,10 @@ import chatty.util.Replacer;
 import chatty.util.StringUtil;
 import chatty.util.api.usericons.Usericon;
 import chatty.util.commands.Parameters;
+import chatty.util.dnd.DockLayout;
 import chatty.util.irc.MsgTags;
 import chatty.util.settings.FileManager.SaveResult;
+import chatty.util.settings.Settings;
 import java.awt.Dimension;
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
@@ -40,6 +42,12 @@ public class Helper {
     }
     
     /**
+     * This is a bit ugly since the other functions here don't rely on external
+     * data like this, but it works.
+     */
+    public static Addressbook addressbook;
+    
+    /**
      * Parses comma-separated channels from a String.
      * 
      * @param channels The list channels to parse
@@ -52,13 +60,39 @@ public class Helper {
         for (String part : parts) {
             String channel = part.trim();
             if (isValidChannel(channel)) {
-                if (prepend && !channel.startsWith("#")) {
-                    channel = "#"+channel;
+                addValidChannel(channel, prepend, result);
+            }
+            else if (channel.startsWith("[") && channel.endsWith("]") && channel.length() > 2 && addressbook != null) {
+                String[] catSplit = channel.substring(1, channel.length() - 1).split(" ");
+                String cat = catSplit[0];
+                boolean noChans = false;
+                boolean onlyChans = false;
+                if (catSplit.length > 1) {
+                    if (catSplit[1].equals("#")) {
+                        onlyChans = true;
+                    }
+                    else if (catSplit[1].equals("!#")) {
+                        noChans = true;
+                    }
                 }
-                result.add(StringUtil.toLowerCase(channel));
+                for (String name : addressbook.getNamesByCategory(cat)) {
+                    if ((!noChans || !name.startsWith("#"))
+                            && (!onlyChans || name.startsWith("#"))) {
+                        addValidChannel(name, prepend, result);
+                    }
+                }
             }
         }
         return result;
+    }
+    
+    private static void addValidChannel(String channel, boolean prepend, Collection<String> collection) {
+        if (isValidChannel(channel)) {
+            if (prepend && !channel.startsWith("#")) {
+                channel = "#" + channel;
+            }
+            collection.add(StringUtil.toLowerCase(channel));
+        }
     }
     
     public static String[] parseChannels(String channels, boolean prepend) {
@@ -825,7 +859,6 @@ public class Helper {
     }
     
     public static void addUserParameters(User user, String msgId, String autoModMsgId, Parameters parameters) {
-        parameters.put("nick", user.getRegularDisplayNick());
         if (msgId != null) {
             parameters.put("msg-id", msgId);
             parameters.put("msg", user.getMessageText(msgId));
@@ -836,23 +869,6 @@ public class Helper {
             if (autoModMsg != null) {
                 parameters.put("msg", autoModMsg);
             }
-        }
-        parameters.put("user-id", user.getId());
-        if (user.getTwitchBadges() != null) {
-            parameters.put("twitch-badge-info", user.getTwitchBadges().toString());
-            parameters.put("twitch-badges", Usericon.makeBadgeInfo(user.getTwitchBadges()));
-        }
-        parameters.put("display-nick", user.getDisplayNick());
-        parameters.put("custom-nick", user.getCustomNick());
-        parameters.put("full-nick", user.getFullNick());
-        if (!user.hasRegularDisplayNick()) {
-            parameters.put("display-nick2", user.getDisplayNick()+" ("+user.getRegularDisplayNick()+")");
-            parameters.put("full-nick2", user.getFullNick()+" ("+user.getRegularDisplayNick()+")");
-            parameters.put("special-nick", "true");
-        }
-        else {
-            parameters.put("display-nick2", user.getDisplayNick());
-            parameters.put("full-nick2", user.getFullNick());
         }
         parameters.putObject("user", user);
     }
@@ -909,6 +925,7 @@ public class Helper {
             MainSettings.DEFAULT_TIMEZONE = TimeZone.getDefault();
             TimeZone tz = TimeZone.getTimeZone(input);
             TimeZone.setDefault(tz);
+            DateTime.setTimeZone(tz);
             LOGGER.info(String.format("[Timezone] Set to %s [%s]", tz.getDisplayName(), input));
         }
     }
@@ -972,6 +989,18 @@ public class Helper {
             }
         }
         return b.toString();
+    }
+    
+    public static Map<String, DockLayout> getLayoutsFromSettings(Settings settings) {
+        Map<String, DockLayout> layouts = new HashMap<>();
+        Map<String, List> values = settings.getMap("layouts");
+        for (Map.Entry<String, List> entry : values.entrySet()) {
+            DockLayout layout = DockLayout.fromList(entry.getValue());
+            if (layout != null) {
+                layouts.put(entry.getKey(), layout);
+            }
+        }
+        return layouts;
     }
     
 }

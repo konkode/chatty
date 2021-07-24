@@ -17,6 +17,8 @@
     <h1><a name="top">Release Information</a></h1>
     
     <p>
+        <a href="#0.15">0.15</a> |
+        <a href="#0.14">0.14</a> |
         <a href="#0.13.1">0.13.1</a> |
         <a href="#0.13">0.13</a> |
         <a href="#0.12">0.12</a> |
@@ -68,7 +70,148 @@
     <p>Optimized for growing creators. Followers dialog decluttered with added dark theme, user dialog support, and monthly follower count added to the stats. Includes bug fixes from beta releases.</p>
 
     <h2>
-        <a name="0.13.1">Version 0.13.1</a> <a name="latest">(This one!)</a> (2020-11-17)
+        <a name="0.15">Version 0.15</a> <a name="latest">(This one!) (2021-07-03)</a>
+        <a href="#top" class="top">[back to top]</a>
+    </h2>
+    <p>More Tabs/Layouts improvements:</p>
+    <ul>
+        <li>More Info Dialogs (such as Channel Info, Followers, Modlogs, ..) can
+            be docked as a tab through their context menu. This means they
+            become part of the new Tabs system and can be dragged&amp;dropped
+            just like channels.</li>
+        <li>Layouts (splits, popouts) can now be saved and loaded, both
+            automatically on restart and manually through the "View" menu. Note
+            that layouts only affect Info Dialogs if they are docked as a tab.</li>
+    </ul>
+    <p>This version also implements some API changes mainly affecting Emoticons
+        (neither the API nor the implementation is perfect yet, but more emotes
+        should show up) and AutoMod (you may have to grant additional access for
+        it to work fully). Moderators may also find the new Repeated Chat
+        Message Detection useful (you can enable it in the "Moderation"
+        settings).</p>
+    <pre>
+### Tabs / Layouts
+- Added setting to restore last session's layout
+- Manually save and load layouts through the View-menu and the /layouts command
+- Made more dialogs dockable as a Tab, accessible through their context menu
+  (Channel Info, Admin, Followers/Subscribers, Live Streams, Moderation Log)
+- Added more settings, including: Max. Tab width, show channel title in splits,
+  more advanced Tab sorting
+- Open all tabs immediately when joining several channels
+- Connect automatically when joining a channel while not connected
+- Updated Tab context menu
+
+### Twitch Features
+- Updated AutoMod and Moderation Logs for new APIs
+- Partially switched to new Emote APIs to support newer emotes
+- Added setting to turn off animation for Twitch's animated emotes
+- Added confirmation prompt for Follow/Unfollow context menu entries
+  (Note: Follow/Unfollow will be removed from the API on July 27, 2021)
+
+### Other
+- Added Repeated Message Detection, which marks repeated messages from the same
+  user in chat (Moderation Settings)
+- Added ability to join channels associated with Addressbook categories (e.g.
+  `[abc]` to join channels associated with the "abc" category
+- Added setting to enable Custom Commands syntax for menu labels (for now mainly
+  to display setting values)
+- Added line numbers to some settings editors
+- Added "Edit All" button for Custom Message Colors setting
+- Added `!user:` Highlight prefix
+- Added "https://" to Streamlink stream URL
+- Updated translations
+- Updated help
+
+### Bugfixes
+- Fixed copying text in chat sometimes not working
+- Fixed copy text menu sometimes appearing when no text visibly selected
+- Fixed reply command not working
+- Fixed timezone setting not applying to some timestamps
+- Fixed bug delaying Chatty startup
+- Fixed rare PubSub related error
+- Make chat log blacklist/whitelist entries lowercase (required for it to work)
+    </pre>
+    
+    <h2>
+        <a name="0.14">Version 0.14</a> (2021-03-04)
+        <a href="#top" class="top">[back to top]</a>
+    </h2>
+    <p>This version features (among other things) a more advanced drag&amp;drop
+        functionality:</p>
+    
+    <ul>
+        <li>Tabs can be dragged to the edges of a chat to create a split view
+            with two tab panes side by side.</li>
+        <li>Tabs can be dragged from one tab pane to another.</li>
+        <li>Popouts also contain a tab pane now (if more than one tab is dragged
+            into it).</li>
+        <li>A popout can be opened through the tab context menu (as before) or
+            by dragging a tab outside of the window. Popouts can be opened
+            either as a dialog or separate window.</li>
+        <li>More customization of how information on tabs is displayed.</li>
+        <li>The Highlighted and Ignored Messages dialogs can be docked as a tab
+            through their context menus.</li>
+        <li>Find relevant settings under "Tabs" and "Window".</li>
+    </ul>
+    
+    <pre>
+### Custom Commands / Commands
+- Added `$"&lt;text&gt;"` to Custom Commands syntax, where everything inside the
+  quotes is interpreted as literal text (e.g. `$"This costs $30 dollars"`)
+- Added optional args parameter to Custom Replacements: `$(_m,[args])`, where
+  "args" is available in the "_m" replacement via `$1-` (like a function)
+- Changes to the /chain command:
+  - Automatically escape seperator character "|" in top-level replacements
+  - Fixed bug where the wrong parameters would be sometimes set
+- Added /say command
+- Added $request() method to perform GET requests
+- Improved $replace() function with more advanced replace options
+- Added identifiers to retrieve info about the local user
+- Prevent endless recursion that could happen in some cases
+- Added warning when Custom Commands have the same name as built-in commands
+
+### Matching (Highlight, Ignore etc.)
+- Added Presets that can be used in individual Matching items (various prefixes)
+- Improved Highlight editor
+- Added "n:" prefix for notes that are ignored for matching
+- Added "startw:" prefix
+- Added Highlight-style user-related matching to custom Usercolors/Badges
+- Added Ignore blacklist (to prevent message from being ignored)
+- Various blacklist improvements
+- Added "Message Info" context menu entry for chat messages showing which
+  Highlights or Custom Message Color item they were affected by (if any)
+- Improved Highlighted/Ignored messages dialogs (e.g. show bans/timeouts)
+
+### Users
+- Added date separator in User Dialog message history
+- Added setting for User Dialog message limit
+- Added user notes (via User Dialogs)
+- Added support for showing pronouns (disabled by default)
+- Added colored names in userlist (disabled by default, limited to users that
+  already talked)
+
+### Other Changes
+- Improved tab/popout handling (see description above)
+- Updated JTattoo Look&amp;Feels to fix some small tabs issues
+- Added "Join"-link for hosted channels
+- Keep message in input box after cancelling mention dialog
+- Account: Allow opening connect URL on error to make manual process easier
+- Always show whisper related info messages in active channel
+- Added setting for link color in info messages
+- Added FFZ per-channel bot recognition
+- Increased the maximum amount of followed streams that can be requested
+- Updated translations/texts
+- Updated help
+
+### Bugfixes
+- Fixed error in Highlight editor due to missing icon on some platforms
+- Fixed sub months in badge tooltips
+- Fixed token verified dialog showing when it shouldn't
+- Fixed website approved automod message showing as points reward
+    </pre>
+    
+    <h2>
+        <a name="0.13.1">Version 0.13.1</a> (2020-11-17)
         <a href="#top" class="top">[back to top]</a>
     </h2>
     <pre>

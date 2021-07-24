@@ -247,6 +247,7 @@ public class SettingsManager {
         settings.addBoolean("ffzModIcon", true);
         settings.addBoolean("bttvEmotes", true);
         settings.addBoolean("showAnimatedEmotes", true);
+        settings.addBoolean("animatedEmotes", true);
         settings.addList("ignoredEmotes", new ArrayList(), Setting.STRING);
         settings.addList("favoriteEmotes", new ArrayList(), Setting.LIST);
         
@@ -291,11 +292,13 @@ public class SettingsManager {
         settings.addString("nickColorCorrection", "normal");
         settings.addLong("nickColorBackground", 1);
         settings.addList("colorPresets", new ArrayList<>(), Setting.LIST);
-        
+        settings.addBoolean("displayColoredNamesInUserlist", false);
+
         // Message Colors
         settings.addBoolean("msgColorsEnabled", false);
         settings.addList("msgColors", new LinkedList(), Setting.STRING);
         settings.addBoolean("msgColorsPrefer", false);
+        settings.addBoolean("msgColorsLinks", true);
         
         // Usercolors
         settings.addBoolean("customUsercolors", false);
@@ -339,12 +342,16 @@ public class SettingsManager {
         settings.addString("textContextMenu", "-\n" +
                 "Translate=/openUrlPrompt https://translate.google.com/#view=home&op=translate&sl=auto&tl=en&text=$$urlencode($(msg))");
         settings.addString("adminContextMenu", "!title=!title $(title)\n!game=!game $(game)");
+        settings.addBoolean("menuCommandLabels", false);
         
         settings.addBoolean("closeUserDialogOnAction", true);
         settings.addBoolean("openUserDialogByMouse", true);
         settings.addBoolean("reuseUserDialog", false);
         settings.addString("userDialogTimestamp", "[HH:mm:ss]");
         settings.addLong("clearUserMessages", 12);
+        settings.addMap("userNotes", new HashMap(), Setting.STRING);
+        settings.addMap("userNotesChat", new HashMap(), Setting.STRING);
+        settings.addLong("userDialogMessageLimit", 100);
 
         // History / Favorites
         settings.addMap("channelHistory",new TreeMap(), Setting.LONG);
@@ -415,11 +422,17 @@ public class SettingsManager {
         settings.addMap("windows", new HashMap<>(), Setting.STRING);
         settings.addLong("restoreMode", WindowStateManager.RESTORE_ON_START);
         settings.addBoolean("restoreOnlyIfOnScreen", true);
+        settings.addMap("dock", new HashMap<>(), Setting.LONG);
+        settings.addMap("layouts", new HashMap<>(), Setting.LIST);
+        settings.addLong("layoutsOptions", 3);
+        settings.addBoolean("restoreLayout", true);
+        settings.addBoolean("restoreLayoutWhisper", false);
 
         // Popouts
         settings.addBoolean("popoutSaveAttributes", true);
-        settings.addBoolean("popoutCloseLastChannel", true);
+        settings.addBoolean("popoutCloseLastChannel", false);
         settings.addList("popoutAttributes", new ArrayList(), Setting.STRING);
+        settings.addString("popoutClose", "ask");
         
         // Titlebar
         settings.addBoolean("simpleTitle", false);
@@ -432,11 +445,28 @@ public class SettingsManager {
 
         // Tabs
         settings.addString("tabOrder", "normal");
+        Map<String, Long> tabsPos = new HashMap<>();
+        tabsPos.put("-nochannel-", -2L);
+        tabsPos.put("#", -1L);
+        tabsPos.put("-", 1L);
+        settings.addMap("tabsPos", tabsPos, Setting.LONG);
+        settings.addBoolean("tabsAutoSort", true);
+        settings.addString("tabsOpen", "activeChan");
         settings.addBoolean("tabsMwheelScrolling", false);
         settings.addBoolean("tabsMwheelScrollingAnywhere", true);
         settings.addString("tabsPlacement", "top");
         settings.addString("tabsLayout", "wrap");
-
+        settings.addLong("tabsLive", 16);
+        settings.addLong("tabsMessage", 4);
+        settings.addLong("tabsHighlight", 8);
+        settings.addLong("tabsStatus", 32);
+        settings.addLong("tabsActive", 128);
+        settings.addLong("tabsPopoutDrag", 2);
+        settings.addLong("tabsMaxWidth", 200);
+        settings.addBoolean("tabsCloseEmpty", true);
+        settings.addBoolean("closeTabsSameType", true);
+        settings.addBoolean("tabsChanTitles", false);
+        
         // Chat Window
         settings.addBoolean("chatScrollbarAlways", false);
         settings.addLong("userlistWidth", 120);
@@ -574,11 +604,30 @@ public class SettingsManager {
         settings.addList("ignoredUsers", new ArrayList(), Setting.STRING);
         settings.addList("ignoredUsersWhisper", new ArrayList(), Setting.STRING);
         settings.addBoolean("ignoredUsersHideInGUI", true);
+        settings.addList("ignoreBlacklist", new ArrayList(), Setting.STRING);
         
         // Filter
         settings.addList("filter", new ArrayList(), Setting.STRING);
         settings.addBoolean("filterEnabled", true);
         settings.addBoolean("filterOwnText", true);
+        
+        // Matching
+        List<String> matchingPresetsDefault = new ArrayList<>();
+        matchingPresetsDefault.add("# _custom replaces \\! with [\\W_]*? (matches non-word characters and underscore 0 or more times)");
+        matchingPresetsDefault.add("_custom $replace($1-,$\"\\\\!\",$\"[\\W_]*?\",reg)");
+        matchingPresetsDefault.add("# _special replaces every letter of words surrounded by ~ with: (<letter>[\\W_]*?)+");
+        matchingPresetsDefault.add("_special $replace($1-,$\"~([^~]+)~\",$replace($(g1),$\"(\\w)\",$\"($1[\\\\W_]*?)+\",regRef),regCustom)");
+        settings.addList("matchingPresets", matchingPresetsDefault, Setting.STRING);
+        
+        // Repeated Messages
+        settings.addBoolean("repeatMsg", false);
+        settings.addLong("repeatMsgSim", 80);
+        settings.addLong("repeatMsgRep", 2);
+        settings.addLong("repeatMsgLen", 0);
+        settings.addLong("repeatMsgTime", 3600);
+        settings.addLong("repeatMsgMethod", 1);
+        settings.addString("repeatMsgIgnored", "");
+        settings.addString("repeatMsgMatch", "!status:M");
 
         // Chat Logging
         settings.addString("logMode", "always");
@@ -660,7 +709,6 @@ public class SettingsManager {
         settings.addBoolean("livestreamer", false);
         settings.addString("livestreamerQualities", "Best, Worst, Select");
         settings.addString("livestreamerCommand", "livestreamer");
-        settings.addBoolean("livestreamerUseAuth", false);
         settings.addBoolean("livestreamerShowDialog", true);
         settings.addBoolean("livestreamerAutoCloseDialog", true);
 
@@ -681,6 +729,9 @@ public class SettingsManager {
         settings.addList("autoUnhostStreams", new ArrayList(), Setting.STRING);
         
         settings.addMap("rewards", new HashMap(), Setting.STRING);
+        
+        settings.addBoolean("pronouns", false);
+        settings.addBoolean("pronounsChat", false);
     }
     
     private boolean loadSuccess;
