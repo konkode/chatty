@@ -29,6 +29,8 @@ import java.awt.Toolkit;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
 import java.beans.PropertyChangeEvent;
@@ -42,6 +44,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.StringTokenizer;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.AbstractAction;
@@ -64,6 +67,10 @@ import javax.swing.SortOrder;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.WindowConstants;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.table.TableCellRenderer;
+import javax.swing.table.TableColumn;
 import javax.swing.text.AbstractDocument;
 import javax.swing.text.AttributeSet;
 import javax.swing.text.BadLocationException;
@@ -573,7 +580,7 @@ public class GuiUtil {
             return "Error: "+command.getSingleLineError();
         } else {
             String resultCommand = command.replace(param);
-            ProcessManager.execute(resultCommand, "Notification");
+            ProcessManager.execute(resultCommand, "Notification", null);
             return "Running: "+resultCommand;
         }
     }
@@ -864,6 +871,88 @@ public class GuiUtil {
         else {
             SwingUtilities.invokeLater(runnable);
         }
+    }
+    
+    /**
+     * Get notified of any text changes in the document.
+     * 
+     * @param doc
+     * @param listener 
+     */
+    public static void addChangeListener(Document doc, Consumer<DocumentEvent> listener) {
+        doc.addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                listener.accept(e);
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                listener.accept(e);
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                listener.accept(e);
+            }
+        });
+    }
+    
+    public static void addSimpleMouseListener(JComponent component, SimpleMouseListener listener) {
+        component.addMouseListener(new MouseAdapter() {
+
+            boolean inside = false;
+
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    listener.contextMenu(e);
+                }
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                if (inside) {
+                    listener.mouseClicked(e);
+                }
+                if (e.isPopupTrigger()) {
+                    listener.contextMenu(e);
+                }
+            }
+
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                inside = true;
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                inside = false;
+            }
+        });
+    }
+    
+    public static abstract class SimpleMouseListener {
+
+        public void mouseClicked(MouseEvent e) {
+        }
+
+        public void contextMenu(MouseEvent e) {
+        }
+
+    }
+    
+    public static int getTableColumnHeaderWidth(JTable table, int column) {
+        TableColumn tableColumn = table.getColumnModel().getColumn(column);
+        Object value = tableColumn.getHeaderValue();
+        TableCellRenderer renderer = tableColumn.getHeaderRenderer();
+
+        if (renderer == null) {
+            renderer = table.getTableHeader().getDefaultRenderer();
+        }
+
+        Component c = renderer.getTableCellRendererComponent(table, value, false, false, -1, column);
+        return c.getPreferredSize().width;
     }
     
 }

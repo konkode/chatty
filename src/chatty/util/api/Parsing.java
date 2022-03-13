@@ -29,24 +29,28 @@ public class Parsing {
      * @param json
      * @return 
      */
-    public static Set<String> parseGameSearch(String json) {
-        Set<String> result = new HashSet<>();
+    public static Set<StreamCategory> parseCategorySearch(String json) {
+        Set<StreamCategory> result = new HashSet<>();
         try {
             JSONParser parser = new JSONParser();
             JSONObject root = (JSONObject)parser.parse(json);
             
-            Object games = root.get("games");
+            Object data = root.get("data");
             
-            if (!(games instanceof JSONArray)) {
+            if (!(data instanceof JSONArray)) {
                 LOGGER.warning("Error parsing game search: Should be array");
                 return null;
             }
-            Iterator it = ((JSONArray)games).iterator();
+            Iterator it = ((JSONArray)data).iterator();
             while (it.hasNext()) {
                 Object obj = it.next();
                 if (obj instanceof JSONObject) {
-                    String name = (String)((JSONObject)obj).get("name");
-                    result.add(name);
+                    JSONObject categoryData = (JSONObject) obj;
+                    String id = JSONUtil.getString(categoryData, "id");
+                    String name = JSONUtil.getString(categoryData, "name");
+                    if (!StringUtil.isNullOrEmpty(id, name)) {
+                        result.add(new StreamCategory(id, name));
+                    }
                 }
             }
             return result;
@@ -88,26 +92,14 @@ public class Parsing {
         }
         try {
             JSONParser parser = new JSONParser();
-            JSONObject root = (JSONObject) parser.parse(json);
+            JSONObject token = (JSONObject) parser.parse(json);
             
-            JSONObject token = (JSONObject) root.get("token");
-            
-            if (token == null) {
-                return null;
-            }
-            
-            boolean valid = (Boolean)token.get("valid");
-            
-            if (!valid) {
-                return new TokenInfo();
-            }
-            
-            String username = (String)token.get("user_name");
+            String username = (String)token.get("login");
             String id = (String)token.get("user_id");
             String client_id = JSONUtil.getString(token, "client_id");
-            JSONObject authorization = (JSONObject)token.get("authorization");
-            JSONArray scopes = (JSONArray)authorization.get("scopes");
-            return new TokenInfo(username, id, client_id, scopes);
+            JSONArray scopes = (JSONArray)token.get("scopes");
+            long expiresIn = JSONUtil.getLong(token, "expires_in", -1);
+            return new TokenInfo(username, id, client_id, scopes, expiresIn);
         }
         catch (Exception e) {
             return null;

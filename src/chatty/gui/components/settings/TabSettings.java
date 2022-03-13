@@ -4,14 +4,18 @@ package chatty.gui.components.settings;
 import chatty.gui.Channels;
 import chatty.gui.GuiUtil;
 import chatty.lang.Language;
+import chatty.util.colors.HtmlColors;
+import java.awt.Color;
 import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Consumer;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
@@ -48,10 +52,12 @@ public class TabSettings extends SettingsPanel {
         main.add(mainTabs, gbc);
         
         JPanel mainPanel = new JPanel(new GridBagLayout());
+        JPanel layoutPanel = new JPanel(new GridBagLayout());
         JPanel orderPanel = new JPanel(new GridBagLayout());
         
-        mainTabs.addTab("Main", mainPanel);
-        mainTabs.addTab("Tab Order", orderPanel);
+        mainTabs.addTab(Language.getString("settings.tabs.tab.behavior"), mainPanel);
+        mainTabs.addTab(Language.getString("settings.tabs.tab.layout"), layoutPanel);
+        mainTabs.addTab(Language.getString("settings.tabs.tab.order"), orderPanel);
         
         //--------------------------
         // Tabs Order
@@ -105,6 +111,9 @@ public class TabSettings extends SettingsPanel {
         mainPanel.add(d.addComboStringSetting("tabsOpen", false, "main", "active", "active2", "activeChan"),
                 d.makeGbc(1, 1, 3, 1, GridBagConstraints.WEST));
         
+        mainPanel.add(d.addSimpleBooleanSetting("tabsCloseMMB"),
+                d.makeGbc(0, 2, 2, 1, GridBagConstraints.WEST));
+        
         //--------------------------
         // Tabs Location
         //--------------------------
@@ -115,10 +124,10 @@ public class TabSettings extends SettingsPanel {
         tabPlacementOptions.put("right", Language.getString("settings.tabs.option.right"));
         ComboStringSetting tabPlacementSetting = new ComboStringSetting(tabPlacementOptions);
         d.addStringSetting("tabsPlacement", tabPlacementSetting);
-        mainPanel.add(new JLabel(Language.getString("settings.tabs.placement")),
-                d.makeGbc(0, 2, 1, 1, GridBagConstraints.WEST));
-        mainPanel.add(tabPlacementSetting,
-                d.makeGbc(1, 2, 3, 1, GridBagConstraints.WEST)
+        layoutPanel.add(new JLabel(Language.getString("settings.tabs.placement")),
+                d.makeGbc(0, 3, 1, 1, GridBagConstraints.WEST));
+        layoutPanel.add(tabPlacementSetting,
+                d.makeGbc(1, 3, 3, 1, GridBagConstraints.WEST)
         );
         
         //-------------
@@ -129,16 +138,24 @@ public class TabSettings extends SettingsPanel {
         tabLayoutOptions.put("scroll",  Language.getString("settings.tabs.option.scroll"));
         ComboStringSetting tabLayoutSetting = new ComboStringSetting(tabLayoutOptions);
         d.addStringSetting("tabsLayout", tabLayoutSetting);
-        mainPanel.add(new JLabel(Language.getString("settings.tabs.layout")),
-                d.makeGbc(0, 3, 1, 1, GridBagConstraints.WEST));
-        mainPanel.add(tabLayoutSetting,
-                d.makeGbc(1, 3, 3, 1, GridBagConstraints.WEST));
+        layoutPanel.add(new JLabel(Language.getString("settings.tabs.layout")),
+                d.makeGbc(0, 4, 1, 1, GridBagConstraints.WEST));
+        layoutPanel.add(tabLayoutSetting,
+                d.makeGbc(1, 4, 3, 1, GridBagConstraints.WEST));
         
-        SettingsUtil.addLabeledComponent(mainPanel, "tabsMaxWidth", 0, 4, 3, GridBagConstraints.WEST,
+        SettingsUtil.addLabeledComponent(layoutPanel, "tabsMaxWidth", 0, 5, 3, GridBagConstraints.WEST,
                 d.addSimpleLongSetting("tabsMaxWidth", 3, true));
         
+        // Fill up remaining space to top-align components
+        gbc = SettingsDialog.makeGbc(0, 6, 4, 1, GridBagConstraints.WEST);
+        gbc.weighty = 1;
+        layoutPanel.add(new JLabel(), gbc);
+        
+        //--------------------------
+        // Close Empty Tab Panes
+        //--------------------------
         mainPanel.add(d.addSimpleBooleanSetting("tabsCloseEmpty"),
-                SettingsDialog.makeGbc(0, 5, 4, 1, GridBagConstraints.WEST));
+                SettingsDialog.makeGbc(0, 6, 4, 1, GridBagConstraints.WEST));
         
         //----------------
         // Tabs Scrolling
@@ -146,9 +163,12 @@ public class TabSettings extends SettingsPanel {
         JCheckBox scroll = d.addSimpleBooleanSetting("tabsMwheelScrolling");
         JCheckBox scroll2 = d.addSimpleBooleanSetting("tabsMwheelScrollingAnywhere");
         mainPanel.add(scroll,
-                d.makeGbc(0, 6, 4, 1, GridBagConstraints.WEST));
+                d.makeGbc(0, 7, 4, 1, GridBagConstraints.WEST));
+        gbc = d.makeGbcSub(0, 8, 4, 1, GridBagConstraints.NORTHWEST);
+        // Fill up remaining space
+        gbc.weighty = 1;
         mainPanel.add(scroll2,
-                d.makeGbcSub(0, 7, 4, 1, GridBagConstraints.WEST));
+                gbc);
 
         SettingsUtil.addSubsettings(scroll, scroll2);
 
@@ -198,6 +218,7 @@ public class TabSettings extends SettingsPanel {
     private static class TabInfoOptions extends JPanel implements LongSetting {
         
         private final Map<Integer, JCheckBox> options = new HashMap<>();
+        private final ColorSetting customColor;
         
         TabInfoOptions(String settingName, SettingsDialog settings) {
             settings.addLongSetting(settingName, this);
@@ -218,6 +239,13 @@ public class TabSettings extends SettingsPanel {
                     SettingsDialog.makeGbc(2, 2, 1, 1, GridBagConstraints.WEST));
             add(makeOption(Channels.DockChannelContainer.LINE, "line"),
                     SettingsDialog.makeGbc(0, 0, 1, 1, GridBagConstraints.WEST));
+            add(makeOption(Channels.DockChannelContainer.CUSTOM_COLOR, "customColor"),
+                    SettingsDialog.makeGbc(0, 3, 2, 1, GridBagConstraints.WEST));
+            customColor = new ColorSetting(ColorSetting.FOREGROUND, null, "Custom Color", " ", new ColorChooser(settings));
+            customColor.setUseBaseColor(false);
+            add(customColor,
+                    SettingsDialog.makeGbc(2, 3, 1, 1, GridBagConstraints.WEST));
+            update();
         }
         
         private JCheckBox makeOption(int option, String labelKey) {
@@ -225,8 +253,40 @@ public class TabSettings extends SettingsPanel {
             String tip = Language.getString("settings.tabs."+labelKey + ".tip", false);
             JCheckBox check = new JCheckBox(text);
             check.setToolTipText(SettingsUtil.addTooltipLinebreaks(tip));
+            check.addItemListener(e -> update());
             options.put(option, check);
             return check;
+        }
+        
+        private final Set<Integer> COLOR_OPTIONS = new HashSet<>(Arrays.asList(new Integer[]{
+            Channels.DockChannelContainer.COLOR1,
+            Channels.DockChannelContainer.COLOR2,
+            Channels.DockChannelContainer.DOT1,
+            Channels.DockChannelContainer.DOT2,
+            Channels.DockChannelContainer.LINE
+        }));
+        
+        private void update() {
+            boolean colorSettingSelected = false;
+            String colorLabel = null;
+            for (Integer option : options.keySet()) {
+                if (COLOR_OPTIONS.contains(option)) {
+                    JCheckBox check = options.get(option);
+                    if (check.isSelected()) {
+                        colorSettingSelected = true;
+                        if (colorLabel != null) {
+                            colorLabel = Language.getString("settings.tabs.customColorSeveral");
+                        }
+                        else {
+                            colorLabel = check.getText();
+                        }
+                    }
+                }
+            }
+            JCheckBox customColorCheck = options.get(Channels.DockChannelContainer.CUSTOM_COLOR);
+            customColorCheck.setEnabled(colorSettingSelected);
+            customColor.setEnabled(customColorCheck.isEnabled() && customColorCheck.isSelected());
+            customColor.setPreviewText(customColor.isEnabled() ? colorLabel : "");
         }
 
         @Override
@@ -237,6 +297,10 @@ public class TabSettings extends SettingsPanel {
                     result = result | entry.getKey();
                 }
             }
+            result = Channels.DockChannelContainer.encodeColor(
+                    customColor.getSettingValueAsColor(),
+                    result,
+                    Channels.DockChannelContainer.CUSTOM_COLOR_START_BIT);
             return result;
         }
 
@@ -250,6 +314,10 @@ public class TabSettings extends SettingsPanel {
             for (Map.Entry<Integer, JCheckBox> entry : options.entrySet()) {
                 entry.getValue().setSelected((setting & entry.getKey()) != 0);
             }
+            Color color = Channels.DockChannelContainer.decodeColor(
+                    setting,
+                    Channels.DockChannelContainer.CUSTOM_COLOR_START_BIT);
+            customColor.setSettingValue(HtmlColors.getNamedColorString(color));
         }
         
     }

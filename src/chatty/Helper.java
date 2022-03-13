@@ -14,6 +14,7 @@ import chatty.util.dnd.DockLayout;
 import chatty.util.irc.MsgTags;
 import chatty.util.settings.FileManager.SaveResult;
 import chatty.util.settings.Settings;
+import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
@@ -22,9 +23,15 @@ import java.net.URLEncoder;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.*;
+import java.util.function.Function;
 import java.util.logging.Logger;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
 
 /**
  * Some Chatty-specific static helper methods.
@@ -45,7 +52,13 @@ public class Helper {
      * This is a bit ugly since the other functions here don't rely on external
      * data like this, but it works.
      */
-    public static Addressbook addressbook;
+    public static ParseChannelHelper parseChannelHelper;
+    
+    public interface ParseChannelHelper {
+        public Collection<String> getFavorites();
+        public Collection<String> getNamesByCategory(String category);
+        public boolean isStreamLive(String stream);
+    }
     
     /**
      * Parses comma-separated channels from a String.
@@ -59,26 +72,42 @@ public class Helper {
         Set<String> result = new LinkedHashSet<>();
         for (String part : parts) {
             String channel = part.trim();
+            channel = getChannelFromUrl(channel);
             if (isValidChannel(channel)) {
                 addValidChannel(channel, prepend, result);
             }
-            else if (channel.startsWith("[") && channel.endsWith("]") && channel.length() > 2 && addressbook != null) {
+            else if (channel.startsWith("[") && channel.endsWith("]") && channel.length() > 2 && parseChannelHelper != null) {
                 String[] catSplit = channel.substring(1, channel.length() - 1).split(" ");
                 String cat = catSplit[0];
                 boolean noChans = false;
                 boolean onlyChans = false;
-                if (catSplit.length > 1) {
-                    if (catSplit[1].equals("#")) {
+                boolean onlyLive = false;
+                for (int i = 1; i < catSplit.length; i++) {
+                    if (catSplit[i].equals("#")) {
                         onlyChans = true;
                     }
-                    else if (catSplit[1].equals("!#")) {
+                    else if (catSplit[i].equals("!#")) {
                         noChans = true;
                     }
+                    else if (catSplit[i].equals("live")) {
+                        onlyLive = true;
+                    }
                 }
-                for (String name : addressbook.getNamesByCategory(cat)) {
-                    if ((!noChans || !name.startsWith("#"))
-                            && (!onlyChans || name.startsWith("#"))) {
-                        addValidChannel(name, prepend, result);
+                List<String> chans = new ArrayList<>();
+                if (cat.equals("*")) {
+                    chans = new ArrayList<>(parseChannelHelper.getFavorites());
+                }
+                else {
+                    for (String name : parseChannelHelper.getNamesByCategory(cat)) {
+                        if ((!noChans || !name.startsWith("#"))
+                                && (!onlyChans || name.startsWith("#"))) {
+                            chans.add(name);
+                        }
+                    }
+                }
+                for (String chan : chans) {
+                    if (!onlyLive || parseChannelHelper.isStreamLive(Helper.toStream(chan))) {
+                        addValidChannel(chan, prepend, result);
                     }
                 }
             }
@@ -93,6 +122,22 @@ public class Helper {
             }
             collection.add(StringUtil.toLowerCase(channel));
         }
+    }
+    
+    /**
+     * Get the channel name from a Twitch url such as twitch.tv/channel_name and
+     * some variants.
+     * 
+     * @param url The url or other input String
+     * @return The channel name from the URL, or the input String if it doesn't
+     * match an expected format
+     */
+    public static String getChannelFromUrl(String url) {
+        Matcher m = CHANNEL_URL_PATTERN.matcher(url);
+        if (m.matches()) {
+            return m.group(1);
+        }
+        return url;
     }
     
     public static String[] parseChannels(String channels, boolean prepend) {
@@ -124,6 +169,7 @@ public class Helper {
     public static final Pattern CHANNEL_PATTERN = Pattern.compile("(?i)^#?"+USERNAME_REGEX+"$");
     public static final Pattern CHATROOM_PATTERN = Pattern.compile("(?i)^#?chatrooms:[0-9a-z-:]+$");
     public static final Pattern STREAM_PATTERN = Pattern.compile("(?i)^"+USERNAME_REGEX+"$");
+    private static final Pattern CHANNEL_URL_PATTERN = Pattern.compile("(?:https?://)?(?:www\\.)?twitch\\.tv/("+USERNAME_REGEX+")[/a-z]*");
     
     /**
      * Kind of relaxed valiadation if a channel, which can have a leading # or
@@ -260,6 +306,14 @@ public class Helper {
         String[] result = new String[channels.length];
         for (int i=0;i<channels.length;i++) {
             result[i] = toStream(channels[i]);
+        }
+        return result;
+    }
+    
+    public static Collection<String> toStream(Collection<String> channels) {
+        List<String> result = new ArrayList<>();
+        for (String channel : channels) {
+            result.add(toStream(channel));
         }
         return result;
     }
@@ -858,6 +912,42 @@ public class Helper {
         return result;
     }
     
+    public static String ESCAPE_FOR_CHAIN_COMMAND = "escape-pipe";
+    
+    public static String escapeForChainCommand(String input) {
+        if (input == null) {
+            return null;
+        }
+        return input.replaceAll("(\\|+)", "$1|");
+    }
+    
+    public static String[] getForeachParams(String input) {
+        if (StringUtil.isNullOrEmpty(input)) {
+            return new String[2];
+        }
+        // A '>' not preceeded or followed by '>'
+        String[] split = input.split("(?<!>)>(?!>)", 2);
+        String list = null;
+        String command = null;
+        Function<String, String> prepare = s -> s.trim().replaceAll(">(>+)", "$1");
+        if (!split[0].trim().isEmpty()) {
+            list = prepare.apply(split[0]);
+        }
+        if (split.length == 2 && !split[1].trim().isEmpty()) {
+            command = prepare.apply(split[1]);
+        }
+        return new String[]{list, command};
+    }
+    
+    public static String ESCAPE_FOR_FOREACH_COMMAND = "escape-greater";
+    
+    public static String escapeForForeachCommand(String input) {
+        if (input == null) {
+            return null;
+        }
+        return input.replaceAll("(>+)", "$1>");
+    }
+    
     public static void addUserParameters(User user, String msgId, String autoModMsgId, Parameters parameters) {
         if (msgId != null) {
             parameters.put("msg-id", msgId);
@@ -878,6 +968,11 @@ public class Helper {
     /**
      * Must be run in EDT.
      * 
+     * If a UserNotice with the same Reward ID (in tags) has already been added
+     * for merge it will perform the merge and output the message, otherwise it
+     * will store the given one for merging and start a backup timer to output
+     * it if no merge will occur in the given time.
+     *
      * @param newNotice
      * @param g 
      */
@@ -897,15 +992,21 @@ public class Helper {
         }
     }
     
+    /**
+     * Finds the Points UserNotice that has already been received from PubSub or
+     * IRC and merges it accordingly. Stops the timer that would have output the
+     * found UserNotice.
+     * 
+     * @param newNotice
+     * @return The merged UserNotice, or null if none could be found
+     */
     private static UserNotice findPointsMerge(UserNotice newNotice) {
         UserNotice found = null;
         for (Map.Entry<UserNotice, javax.swing.Timer> entry : pointsMerge.entrySet()) {
             UserNotice stored = entry.getKey();
             // Attached messages seem to be trimmed depending on source
-            boolean sameAttachedMsg = Objects.equals(
-                    StringUtil.trimAll(stored.attachedMessage),
-                    StringUtil.trimAll(newNotice.attachedMessage));
-            if (stored.user.sameUser(newNotice.user) && sameAttachedMsg) {
+            if (stored.tags.getCustomRewardId() != null
+                    && stored.tags.getCustomRewardId().equals(newNotice.tags.getCustomRewardId())) {
                 found = stored;
                 entry.getValue().stop();
             }
@@ -1001,6 +1102,57 @@ public class Helper {
             }
         }
         return layouts;
+    }
+    
+    /**
+     * Check if the correct SLF4J binding was loaded, when more bindings than
+     * the one in the JAR are found, which seems almost impossible, but just in
+     * case. I haven't been able to have this happen when using the regular JAR
+     * since the classpath would be just the JAR and adding a binding as an
+     * extension library causes the following error, but I don't know if that is
+     * always the case.
+     *
+     * Failed to instantiate SLF4J LoggerFactory
+     * java.lang.NoClassDefFoundError: org/slf4j/spi/LoggerFactoryBinder at
+     *  java.lang.ClassLoader.defineClass1(Native Method) at
+     *  java.lang.ClassLoader.defineClass(ClassLoader.java:763)
+     *  ...
+     * Caused by: java.lang.ClassNotFoundException: org.slf4j.spi.LoggerFactoryBinder at
+     *  java.net.URLClassLoader.findClass(URLClassLoader.java:382) at
+     *  java.lang.ClassLoader.loadClass(ClassLoader.java:424)
+     *  ...
+     */
+    public static void checkSLF4JBinding() {
+        try {
+            if (!org.slf4j.LoggerFactory.getILoggerFactory().getClass().getName().equals("org.slf4j.impl.JDK14LoggerFactory")) {
+                throw new RuntimeException("Wrong SLF4F binding: " + org.slf4j.LoggerFactory.getILoggerFactory().getClass().getName());
+            }
+        }
+        catch (Throwable ex) {
+            startError("An error occured getting logger binding. See debug logs for details.");
+            throw ex;
+        }
+    }
+    
+    /**
+     * Show a simple window with an error, intended only for use when other GUI
+     * has not been created yet.
+     * 
+     * @param msg 
+     */
+    public static void startError(String msg) {
+        JFrame frame = new JFrame();
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        JLabel label = new JLabel(msg);
+        label.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        frame.add(label, BorderLayout.CENTER);
+        frame.setTitle("Chatty Start Error");
+        JButton closeButton = new JButton("OK");
+        closeButton.addActionListener(e -> System.exit(0));
+        frame.add(closeButton, BorderLayout.SOUTH);
+        frame.pack();
+        frame.setLocationRelativeTo(null);
+        frame.setVisible(true);
     }
     
 }

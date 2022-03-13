@@ -6,11 +6,14 @@ import chatty.Room;
 import chatty.User;
 import chatty.gui.Highlighter.HighlightItem;
 import chatty.gui.Highlighter.HighlightItem.Type;
+import chatty.gui.Highlighter.Match;
 import chatty.util.irc.MsgTags;
 import chatty.util.settings.Settings;
 import java.awt.Color;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -688,6 +691,8 @@ public class HighlighterTest {
         assertTrue(highlighter.check(user, "Hello testi"));
         updateBlacklist("testi");
         assertFalse(highlighter.check(user, "Hello testi"));
+        update("config:!blacklist test");
+        assertTrue(highlighter.check(user, "Hello testi"));
         
         updateBlacklist();
         update("w:ROM");
@@ -786,8 +791,26 @@ public class HighlighterTest {
         
         update("user:testuser", "abc");
         updateBlacklist("config:block !start:!quote");
+        assertFalse(highlighter.check(user, "123"));
         assertFalse(highlighter.check(user, "abc"));
         assertFalse(highlighter.check(user, "blah abc"));
+        assertTrue(highlighter.check(user, "!quote blah abc"));
+        
+        update("user:testuser", "config:!blacklist abc");
+        updateBlacklist("config:block !start:!quote");
+        assertFalse(highlighter.check(user, "123"));
+        assertFalse(highlighter.check(user2, "123"));
+        assertTrue(highlighter.check(user2, "abc"));
+        assertTrue(highlighter.check(user, "abc"));
+        assertTrue(highlighter.check(user, "blah abc"));
+        assertTrue(highlighter.check(user, "!quote blah abc"));
+        
+        update("config:!blacklist user:testuser", "abc");
+        updateBlacklist("config:block !start:!quote");
+        assertTrue(highlighter.check(user, "123"));
+        assertFalse(highlighter.check(user2, "abc"));
+        assertTrue(highlighter.check(user, "abc"));
+        assertTrue(highlighter.check(user, "blah abc"));
         assertTrue(highlighter.check(user, "!quote blah abc"));
     }
     
@@ -818,6 +841,10 @@ public class HighlighterTest {
         assertTrue(highlighter.check(user, "Cake"));
         
         update("blacklist:cheesecake cake");
+        assertTrue(highlighter.check(user, "cake"));
+        assertFalse(highlighter.check(user, "cheesecake"));
+        
+        update("blacklist:cheesecake config:!blacklist cake");
         assertTrue(highlighter.check(user, "cake"));
         assertFalse(highlighter.check(user, "cheesecake"));
         
@@ -1114,6 +1141,44 @@ public class HighlighterTest {
         assertFalse(highlighter.check(user, "blahABCfeawfeawf"));
         assertFalse(highlighter.check(user, "blah"));
         assertFalse(highlighter.check(user, "fawefeawf"));
+    }
+    
+    @Test
+    public void testMatches() {
+        highlighter.setIncludeAllTextMatches(false);
+        update("cat", "nice cat");
+        assertTrue(highlighter.check(user, "What a nice cat!"));
+        assertEquals(highlighter.getLastTextMatches().size(), 1);
+        assertEquals(highlighter.getLastMatchItems().size(), 1);
+        
+        // Second matched entry adds to the area covered by matches
+        highlighter.setIncludeAllTextMatches(true);
+        assertTrue(highlighter.check(user, "What a nice cat!"));
+        assertEquals(highlighter.getLastTextMatches().size(), 2);
+        assertEquals(highlighter.getLastMatchItems().size(), 2);
+        
+        // First matched entry already covers area matched by the second
+        update("nice cat", "cat");
+        assertTrue(highlighter.check(user, "What a nice cat!"));
+        assertEquals(highlighter.getLastTextMatches().size(), 1);
+        assertEquals(highlighter.getLastMatchItems().size(), 1);
+        
+        // First matched entry doesn't have text matches, but second does
+        update("config:blah", "cat");
+        assertTrue(highlighter.check(user, "What a nice cat!"));
+        assertEquals(highlighter.getLastTextMatches().size(), 1);
+        assertEquals(highlighter.getLastMatchItems().size(), 2);
+        
+        // Second matched entry without text matches doesn't have any effect
+        update("cat", "config:blah");
+        assertTrue(highlighter.check(user, "What a nice cat!"));
+        assertEquals(highlighter.getLastTextMatches().size(), 1);
+        assertEquals(highlighter.getLastMatchItems().size(), 1);
+        
+        update("cat", "kitty", "nice cat");
+        assertTrue(highlighter.check(user, "What a nice kitty cat, isn't it a nice cat!"));
+        assertEquals(highlighter.getLastTextMatches().size(), 4);
+        assertEquals(highlighter.getLastMatchItems().size(), 3);
     }
     
 }

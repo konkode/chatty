@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javax.swing.Box;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JDialog;
@@ -118,8 +119,6 @@ public class MessageSettings extends SettingsPanel {
     }
     
     public static JPanel createTimestampPanel(SettingsDialog d, String setting) {
-        JPanel timestampPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
-        
         final Map<String,String> timestampOptions = new LinkedHashMap<>();
         timestampOptions.put("off", "Off");
         timestampOptions.put("", "Empty (Space)");
@@ -130,8 +129,6 @@ public class MessageSettings extends SettingsPanel {
         ComboStringSetting combo = new ComboStringSetting(timestampOptions);
         combo.setEditable(false);
         d.addStringSetting(setting, combo);
-        
-        SettingsUtil.addLabeledComponent(timestampPanel, "settings.otherMessageSettings.timestamp", 0, 0, 2, EAST, combo);
         
         JButton editTimestampButton = new JButton(Language.getString("dialog.button.customize"));
         editTimestampButton.setMargin(GuiUtil.SMALL_BUTTON_INSETS);
@@ -148,6 +145,10 @@ public class MessageSettings extends SettingsPanel {
             }
         });
         editTimestampButton.getAccessibleContext().setAccessibleName(Language.getString("settings.otherMessageSettings.customizeTimestamp"));
+        
+        JPanel timestampPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        timestampPanel.add(combo);
+        timestampPanel.add(Box.createHorizontalStrut(5));
         timestampPanel.add(editTimestampButton);
         return timestampPanel;
     }
@@ -170,7 +171,7 @@ public class MessageSettings extends SettingsPanel {
         });
         
         private static final List<String> DATE_FORMATS = Arrays.asList(new String[]{
-            "YYYY-MM-dd", "MMM d", "d MMM", "dd.MM.", ""
+            "yyyy-MM-dd", "MMM d", "d MMM", "dd.MM.", ""
         });
         
         private static final List<String> BEFORE = Arrays.asList(new String[]{
@@ -400,7 +401,7 @@ public class MessageSettings extends SettingsPanel {
     
     public static void main(String[] args) {
         TimestampEditor s = new TimestampEditor(null);
-        s.showDialog("[YYYY-MM-dd HH:mm]");
+        s.showDialog("[yyyy-MM-dd HH:mm]");
         System.exit(0);
     }
     

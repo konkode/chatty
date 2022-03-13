@@ -153,8 +153,10 @@ public class FollowersDialog extends JDialog {
         gbc = GuiUtil.makeGbc(0, 1, 1, 1, GridBagConstraints.WEST);
         gbc.insets = new Insets(0, 6, 3, 5);
         gbc.weightx = 1;
-        stats.setToolTipText(type+" in the last 30 days (Month), 7 days (Week), 24 hours (Day) and Hour. Based on the current list.");
-        mainPanel.add(stats, gbc);
+        stats.setToolTipText(type+" in the last 30 days (Month), 7 days (Week), 24 hours (Day) and Hour (based on the current list)");
+        if (type == Type.FOLLOWERS) {
+            mainPanel.add(stats, gbc);
+        }
         
         gbc = GuiUtil.makeGbc(0, 2, 2, 1);
         gbc.fill = GridBagConstraints.BOTH;
@@ -237,8 +239,8 @@ public class FollowersDialog extends JDialog {
         
         add(mainPanel);
         
-        DockContent content = new DockContentContainer(type.name, mainPanel, dockedDialogs.getDockManager());
-        content.setId(type == Type.FOLLOWERS ? "-followers-" : "-subscribers-");
+        DockContent content = dockedDialogs.createContent(mainPanel, type.name,
+                type == Type.FOLLOWERS ? "-followers-" : "-subscribers-");
         helper = dockedDialogs.createHelper(new DockedDialogHelper.DockedDialog() {
             @Override
             public void setVisible(boolean visible) {
@@ -268,6 +270,11 @@ public class FollowersDialog extends JDialog {
             @Override
             public DockContent getContent() {
                 return content;
+            }
+        });
+        helper.setChannelChangeListener((channel) -> {
+            if (isVisible()) {
+                showDialog(Helper.toStream(channel));
             }
         });
         
@@ -378,7 +385,10 @@ public class FollowersDialog extends JDialog {
     
     private void openMainContextMenu(MouseEvent e) {
         if (e.isPopupTrigger()) {
-            new MyContextMenu(helper.isDocked()).show(e.getComponent(), e.getX(), e.getY());
+            ContextMenu menu = new MyContextMenu();
+            menu.addSeparator();
+            helper.addToContextMenu(menu);
+            menu.show(e.getComponent(), e.getX(), e.getY());
         }
     }
 
@@ -531,6 +541,11 @@ public class FollowersDialog extends JDialog {
      * @param oldInfo 
      */
     private void updateTotalLabel(FollowerInfo newInfo, FollowerInfo oldInfo) {
+        String points = "";
+        if (type == Type.SUBSCRIBERS) {
+            points = String.format(" (%s Points)",
+                    Helper.formatViewerCount(newInfo.totalPoints));
+        }
         if (oldInfo != null && newInfo != oldInfo && oldInfo.stream.equals(stream)
                 && !oldInfo.requestError) {
             int change = newInfo.total - oldInfo.total;
@@ -540,9 +555,9 @@ public class FollowersDialog extends JDialog {
             } else if (change > 0) {
                 changeString = " (+" + change + ")";
             }
-            total.setText("Total: " + Helper.formatViewerCount(newInfo.total) + changeString);
+            total.setText("Total: " + Helper.formatViewerCount(newInfo.total) + changeString + points);
         } else {
-            total.setText("Total: " + Helper.formatViewerCount(newInfo.total));
+            total.setText("Total: " + Helper.formatViewerCount(newInfo.total) + points);
         }
     }
     
@@ -575,8 +590,13 @@ public class FollowersDialog extends JDialog {
                     for (Follower f : lastValidInfo.followers) {
                         writer.write(f.name);
                         if (!onlyName) {
-                            writer.write("\t" + DateTime.formatFullDatetime(f.follow_time));
-                            writer.write(" (" + DateTime.agoSingleVerbose(f.follow_time) + ")");
+                            if (f.follow_time != -1) {
+                                writer.write("\t" + DateTime.formatFullDatetime(f.follow_time));
+                                writer.write(" (" + DateTime.agoSingleVerbose(f.follow_time) + ")");
+                            }
+                            if (f.verboseInfo != null) {
+                                writer.write("\t" + f.verboseInfo);
+                            }
                         }
                         writer.newLine();
                     }
@@ -649,13 +669,20 @@ public class FollowersDialog extends JDialog {
                 }
             }
             else if (type == Type.TIME) {
-                if (compactMode) {
-                    setText(DateTime.agoSingleCompact(f.follow_time));
+                if (f.info != null) {
+                    // No time available if info is set as alternative
+                    setText(f.info);
+                    setToolTipText(f.verboseInfo);
                 }
                 else {
-                    setText(DateTime.agoSingleVerbose(f.follow_time));
+                    if (compactMode) {
+                        setText(DateTime.agoSingleCompact(f.follow_time));
+                    }
+                    else {
+                        setText(DateTime.agoSingleVerbose(f.follow_time));
+                    }
+                    setToolTipText(DateTime.formatFullDatetime(f.follow_time));
                 }
-                setToolTipText(DateTime.formatFullDatetime(f.follow_time));
             }
             else if (type == Type.USER_TIME) {
                 if (f.user_created_time != -1) {
@@ -827,12 +854,10 @@ public class FollowersDialog extends JDialog {
     
     private class MyContextMenu extends ContextMenu {
 
-        public MyContextMenu(boolean isDocked) {
+        public MyContextMenu() {
             final String saveMenu = "Export list to file";
             addItem("saveSimple", "Names only", saveMenu);
-            addItem("saveVerbose", "Names and dates", saveMenu);
-            addSeparator();
-            addCheckboxItem("dockToggleDocked", "Dock as tab", isDocked);
+            addItem("saveVerbose", "Names and extra info", saveMenu);
         }
         
         @Override

@@ -16,6 +16,9 @@ import chatty.lang.Language;
 import chatty.util.DateTime;
 import chatty.util.StringUtil;
 import chatty.util.api.ChannelInfo;
+import chatty.util.api.ChannelStatus;
+import chatty.util.api.ResultManager;
+import chatty.util.api.StreamCategory;
 import chatty.util.api.StreamTagManager;
 import chatty.util.api.StreamTagManager.StreamTag;
 import chatty.util.api.TwitchApi;
@@ -32,8 +35,10 @@ import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JComponent;
@@ -85,7 +90,10 @@ public class StatusPanel extends JPanel {
     private String currentChannel;
     private boolean statusEdited;
     private final List<StreamTag> currentStreamTags = new ArrayList<>();
+    private StreamCategory currentStreamCategory = StreamCategory.EMPTY;
     private long infoLastLoaded;
+    
+    private final Map<String, CacheItem> cache = new HashMap<>();
     
     private boolean loading;
     private boolean loadingStatus;
@@ -241,8 +249,7 @@ public class StatusPanel extends JPanel {
                         loadingStatus = true;
                         loadingTags = true;
                         setLoading(true);
-                        ChannelInfo info = new ChannelInfo(currentChannel, status.getText(), game.getText());
-                        main.putChannelInfo(info);
+                        main.putChannelInfo(ChannelStatus.createPut(currentChannel, status.getText(), currentStreamCategory));
                         putTags();
                         addCurrentToHistory();
                     }
@@ -250,12 +257,14 @@ public class StatusPanel extends JPanel {
                     getChannelInfo();
                 } else if (e.getSource() == selectGame) {
                     selectGameDialog.setLocationRelativeTo(StatusPanel.this);
-                    String result = selectGameDialog.open(game.getText());
+                    StreamCategory result = selectGameDialog.open(currentStreamCategory);
                     if (result != null) {
-                        game.setText(result);
+                        currentStreamCategory = result;
+                        game.setText(result.name);
                         statusEdited();
                     }
                 } else if (e.getSource() == removeGame) {
+                    currentStreamCategory = StreamCategory.EMPTY;
                     game.setText("");
                     statusEdited();
                 } else if (e.getSource() == selectTags) {
@@ -269,7 +278,8 @@ public class StatusPanel extends JPanel {
                     setTags(null);
                     statusEdited();
                 } else if (e.getSource() == historyButton) {
-                    StatusHistoryEntry result = statusHistoryDialog.showDialog(game.getText());
+                    statusHistoryDialog.setLocationRelativeTo(StatusPanel.this);
+                    StatusHistoryEntry result = statusHistoryDialog.showDialog(currentStreamCategory);
                     if (result != null) {
                         // A null value means that value shouldn't be used to
                         // change the info, it would be empty otherwise
@@ -277,7 +287,8 @@ public class StatusPanel extends JPanel {
                             status.setText(result.title);
                         }
                         if (result.game != null) {
-                            game.setText(result.game);
+                            currentStreamCategory = result.game;
+                            game.setText(result.game.name);
                         }
                         if (result.tags != null) {
                             setTags(result.tags);
@@ -303,6 +314,29 @@ public class StatusPanel extends JPanel {
         addContextMenu(game);
         addContextMenu(streamTags);
         TextSelectionMenu.install(status);
+        
+        /**
+         * Update category ids and names if necessary. Category favorites get
+         * updated in SelectGameDialog.
+         */
+        api.subscribe(ResultManager.Type.CATEGORY_RESULT, (ResultManager.CategoryResult) categories -> {
+            SwingUtilities.invokeLater(() -> {
+                if (categories != null) {
+                    // Update status history
+                    for (StreamCategory category : categories) {
+                        main.getStatusHistory().updateCategory(category);
+                    }
+                    // Update currently selected category
+                    if (!currentStreamCategory.hasId()) {
+                        for (StreamCategory category : categories) {
+                            if (currentStreamCategory.nameMatches(category)) {
+                                currentStreamCategory = category;
+                            }
+                        }
+                    }
+                }
+            });
+        });
     }
     
     private void addContextMenu(JComponent comp) {
@@ -353,13 +387,25 @@ public class StatusPanel extends JPanel {
     }
     
     public void changeChannel(String channel) {
+        if (channel.equals(currentChannel)) {
+            return;
+        }
+        // Save previous data
+        saveToCache();
         currentChannel = channel;
-        status.setText("");
-        game.setText("");
-        setTags(null);
-        
-        // This will reset last loaded anyway
-        getChannelInfo();
+        // Load data from new channel (if available)
+        if (loadFromCache()) {
+            setLoading(false);
+        }
+        else {
+            status.setText("");
+            game.setText("");
+            setTags(null);
+
+            // This will reset last loaded anyway
+            getChannelInfo();
+        }
+        setPutResult("");
     }
     
     private void setTags(Collection<StreamTag> tags) {
@@ -392,20 +438,15 @@ public class StatusPanel extends JPanel {
             });
         });
     }
-
-    /**
-     * Channel Info received, which happens when Channel Info is requested
-     * or when a new status was successfully set.
-     * 
-     * @param stream Then stream the info is for
-     * @param info The channel info
-     */
-    public void setChannelInfo(String stream, ChannelInfo info, TwitchApi.RequestResultCode result) {
-        if (stream.equals(this.currentChannel)) {
+    
+    public void channelStatusReceived(ChannelStatus channelStatus, TwitchApi.RequestResultCode result) {
+        if (channelStatus.channelLogin.equals(currentChannel)) {
             if (result == TwitchApi.RequestResultCode.SUCCESS) {
-                status.setText(info.getStatus());
-                game.setText(info.getGame());
-            } else {
+                status.setText(channelStatus.title);
+                currentStreamCategory = channelStatus.category;
+                game.setText(channelStatus.category.name);
+            }
+            else {
                 infoLastLoaded = -1;
                 if (result == TwitchApi.RequestResultCode.NOT_FOUND) {
                     statusLoadError = "Channel not found";
@@ -475,7 +516,7 @@ public class StatusPanel extends JPanel {
         tagsLoadError = null;
         
         setLoading(true);
-        main.getChannelInfo(currentChannel);
+        api.getChannelStatus(currentChannel);
         final String channel = currentChannel;
         api.getTagsByStream(currentChannel, (tags, e) -> {
             SwingUtilities.invokeLater(() -> {
@@ -608,10 +649,9 @@ public class StatusPanel extends JPanel {
      */
     private void addCurrentToHistory() {
         String currentTitle = status.getText().trim();
-        String currentGame = game.getText();
         if (main.getSaveStatusHistorySetting()
-                || main.getStatusHistory().isFavorite(currentTitle, currentGame, currentStreamTags)) {
-            main.getStatusHistory().addUsed(currentTitle, currentGame, currentStreamTags);
+                || main.getStatusHistory().isFavorite(currentTitle, currentStreamCategory, currentStreamTags)) {
+            main.getStatusHistory().addUsed(currentTitle, currentStreamCategory, currentStreamTags);
         }
     }
     
@@ -619,7 +659,50 @@ public class StatusPanel extends JPanel {
      * Adds the current status to the preset favorites
      */
     private void addCurrentToFavorites() {
-        main.getStatusHistory().addFavorite(status.getText().trim(), game.getText(), currentStreamTags);
+        main.getStatusHistory().addFavorite(status.getText().trim(), currentStreamCategory, currentStreamTags);
     }
     
+    private static class CacheItem {
+        
+        public final String channel;
+        public final String title;
+        public final StreamCategory category;
+        public final List<StreamTag> tags;
+        public final boolean statusEdited;
+        public final long lastLoaded;
+        
+        public CacheItem(String channel, String title, StreamCategory category, List<StreamTag> tags, boolean statusEdited, long lastLoaded) {
+            this.channel = channel;
+            this.title = title;
+            this.category = category;
+            this.tags = new ArrayList<>(tags);
+            this.statusEdited = statusEdited;
+            this.lastLoaded = lastLoaded;
+        }
+        
+    }
+    
+    private void saveToCache() {
+        if (!loading && !StringUtil.isNullOrEmpty(currentChannel)) {
+            cache.put(currentChannel, new CacheItem(currentChannel, status.getText(),
+                    currentStreamCategory, currentStreamTags, statusEdited, infoLastLoaded));
+        }
+    }
+    
+    private boolean loadFromCache() {
+        if (!StringUtil.isNullOrEmpty(currentChannel)) {
+            CacheItem item = cache.get(currentChannel);
+            if (item != null) {
+                status.setText(item.title);
+                currentStreamCategory = item.category;
+                game.setText(item.category.name);
+                setTags(item.tags);
+                statusEdited = item.statusEdited;
+                infoLastLoaded = item.lastLoaded;
+                return true;
+            }
+        }
+        return false;
+    }
+
 }

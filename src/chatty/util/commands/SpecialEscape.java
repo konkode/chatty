@@ -1,6 +1,7 @@
 
 package chatty.util.commands;
 
+import chatty.Helper;
 import chatty.util.Debugging;
 import java.util.Objects;
 import java.util.Set;
@@ -21,8 +22,11 @@ public class SpecialEscape implements Item {
     @Override
     public String replace(Parameters parameters) {
         String result = item.replace(parameters);
-        if (parameters.get("escape-pipe") != null) {
-            result = result.replaceAll("(\\|+)", "$1|");
+        if (parameters.get(Helper.ESCAPE_FOR_CHAIN_COMMAND) != null && result != null) {
+            result = Helper.escapeForChainCommand(result);
+        }
+        if (parameters.get(Helper.ESCAPE_FOR_FOREACH_COMMAND) != null && result != null) {
+            result = Helper.escapeForForeachCommand(result);
         }
         return result;
     }

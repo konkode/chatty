@@ -22,7 +22,7 @@ public class StreamChatContextMenu extends ContextMenu {
     private static final String CHANNEL_SETTING = "streamChatChannels";
     private static final String LOGO_SETTING = "streamChatLogos";
 
-    public StreamChatContextMenu() {
+    public StreamChatContextMenu(boolean isDocked) {
         addItem("clearHighlights", Language.getString("highlightedDialog.cm.clear"));
         addSeparator();
         List<String> channels = new ArrayList<>();
@@ -58,8 +58,9 @@ public class StreamChatContextMenu extends ContextMenu {
         if (currentSize == 0) {
             getItem("logoOff").setSelected(true);
         }
-        addSeparator(logoSubmenu);
-        addItem("logoReadme", "Readme", logoSubmenu);
+        
+        addSeparator();
+        addCheckboxItem("dockToggleDocked", "Dock as tab", isDocked);
     }
     
     private static void addChans(List<String> chans, Collection<String> add) {
@@ -88,9 +89,6 @@ public class StreamChatContextMenu extends ContextMenu {
         }
         else if (e.getActionCommand().equals("logoOff")) {
             client.settings.setString(LOGO_SETTING, "0");
-        }
-        else if (e.getActionCommand().equals("logoReadme")) {
-            JOptionPane.showMessageDialog(this, "Note that the channel logos are only visible for channels that have been live this session.\nSetting changes only apply to new messages.");
         }
         for (ContextMenuListener l : getContextMenuListeners()) {
             l.menuItemClicked(e);

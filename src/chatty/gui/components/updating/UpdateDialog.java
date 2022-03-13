@@ -5,6 +5,7 @@ import chatty.Chatty;
 import chatty.gui.GuiUtil;
 import chatty.gui.components.LinkLabel;
 import chatty.gui.components.LinkLabelListener;
+import chatty.gui.components.settings.SettingsUtil;
 import chatty.lang.Language;
 import chatty.util.DateTime;
 import chatty.util.Debugging;
@@ -13,6 +14,7 @@ import chatty.util.GitHub.Asset;
 import chatty.util.GitHub.Release;
 import chatty.util.GitHub.Releases;
 import chatty.util.MiscUtil;
+import chatty.util.StringUtil;
 import chatty.util.settings.Settings;
 import java.awt.Dimension;
 import java.awt.GridBagConstraints;
@@ -62,6 +64,7 @@ public class UpdateDialog extends JDialog {
     private Release latestRelease;
     
     private final JCheckBox enableCheckBeta;
+    private final JCheckBox enableUpdateJar;
     private final JButton closeButton;
     private final JButton downloadButton;
     
@@ -122,14 +125,28 @@ public class UpdateDialog extends JDialog {
         gbc = GuiUtil.makeGbc(0, 4, 1, 1, GridBagConstraints.WEST);
         add(enableCheckBeta, gbc);
         
-        gbc = GuiUtil.makeGbc(0, 5, 1, 1);
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.weightx = 1;
-        gbc.insets = new Insets(1, 12, 5, 5);
+        LinkLabel releaseNotes = new LinkLabel("[help-releases:top Release notes]", linkLabelListener);
+        gbc = GuiUtil.makeGbc(0, 5, 1, 1, GridBagConstraints.WEST);
+        add(releaseNotes, gbc);
+        
+        //gbc = GuiUtil.makeGbc(0, 5, 1, 1);
+        //gbc.fill = GridBagConstraints.HORIZONTAL;
+        //gbc.weightx = 1;
+        //gbc.insets = new Insets(1, 12, 5, 5);
         //add(new JLabel(BETA_INFO), gbc);
         
+        enableUpdateJar = new JCheckBox("Stay on current Standalone (updates JAR only)");
+        enableUpdateJar.setToolTipText(SettingsUtil.addTooltipLinebreaks("Will download the JAR installer only, for example if you need to save data or need to stay on the old Standalone version."));
+        enableUpdateJar.addActionListener(e -> {
+            settings.setBoolean("updateJar", enableUpdateJar.isSelected());
+            updateDisplay();
+        });
+        gbc = GuiUtil.makeGbc(0, 6, 1, 1, GridBagConstraints.WEST);
+        gbc.insets = new Insets(0, 5, 5, 5);
+        add(enableUpdateJar, gbc);
+
         closeButton = new JButton(Language.getString("dialog.button.close"));
-        gbc = GuiUtil.makeGbc(0, 6, 1, 1);
+        gbc = GuiUtil.makeGbc(0, 7, 1, 1);
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.weightx = 1;
         add(closeButton, gbc);
@@ -167,7 +184,11 @@ public class UpdateDialog extends JDialog {
         downloadButtonInfo.setText(null);
         downloadsInfo.setVisible(false);
         enableCheckBeta.setSelected(settings.getBoolean("checkNewBeta"));
+        enableUpdateJar.setSelected(settings.getBoolean("updateJar"));
         if (releases != null) {
+            if (!Stuff.isStandalone()) {
+                enableUpdateJar.setVisible(false);
+            }
             Release latest = releases.getLatest();
             boolean betaUpdateAvailable = false;
             
@@ -212,7 +233,9 @@ public class UpdateDialog extends JDialog {
     private void setVersion(Release release, boolean newerBeta) {
         setTitle("You are up-to-date!");
         
-        String main = HTML_PREFIX+"<div style='font-size:1.2em;padding-left:10px;padding-right:10px;'>You are running the latest version</div>".replaceAll(" ", "&nbsp;");
+        String main = HTML_PREFIX + ("<div style='font-size:1.2em;padding-left:10px;padding-right:10px;'>"
+                + "You&nbsp;are&nbsp;running&nbsp;the&nbsp;[help-releases:top latest&nbsp;version]"
+                + "</div>");
         if (newerBeta) {
             main += "<div style='margin:5px'>There is a newer beta version though!</div>";
         }
@@ -249,7 +272,7 @@ public class UpdateDialog extends JDialog {
         
         Asset asset = null;
         if (MiscUtil.OS_WINDOWS && Stuff.installPossible()) {
-            if (isStandalone) {
+            if (isStandalone && !settings.getBoolean("updateJar")) {
                 asset = latest.getAsset("win_standalone_setup.exe");
             }
             if (asset == null) {
@@ -262,16 +285,27 @@ public class UpdateDialog extends JDialog {
         installDir = Stuff.getInstallDir(isStandalone);
         downloadButton.setVisible(true);
         if (asset == null || installDir == null) {
+            String reason = "";
+            if (!MiscUtil.OS_WINDOWS) {
+                reason = "only supported on Windows";
+            }
+            else if (!Stuff.installPossible() && Stuff.getInitError() != null) {
+                reason = Stuff.getInitError();
+            }
+            if (!StringUtil.isNullOrEmpty(reason)) {
+                reason = ", "+reason;
+            }
             downloadButton.setEnabled(false);
             downloadButtonInfo.setText("<html><body style='width:200px;text-align:center;'>"
-                    + "<small>(Automatic download not available)</small>");
+                    + "<small>(Automatic download not available"+reason+")</small>");
         } else {
             downloadButton.setEnabled(true);
             downloadButtonInfo.setText("<html><body><div style='width:200px;text-align:center;'>"
                     + "<small>(Downloads, closes Chatty and runs the setup: "+asset.getName()+")</small></div>");
         }
         downloadsInfo.setVisible(true);
-        downloadsInfo.setText("<html><body style='padding:0 10 0 10;'><p>Direct downloads (manual install):</p>"+makeDownloadLinks(latest));
+        downloadsInfo.setText("<html><body style='padding:0px 10px 0px 10px;'><p>Direct downloads (manual install):</p>"
+                + makeDownloadLinks(latest));
     }
     
     private String makeDownloadLinks(Release release) {
@@ -326,10 +360,11 @@ public class UpdateDialog extends JDialog {
         
         Settings settings = new Settings("", null);
         settings.addBoolean("checkNewBeta", true);
+        settings.addBoolean("updateJar", false);
         settings.addLong("versionLastChecked", 0L);
         
         LinkLabelListener linkLabelListener = (type, ref) -> {
-            System.out.println("Link clicked: "+ref);
+            System.out.println("Link clicked: " + type + ":" + ref);
         };
         
         Releases data = testReleases();

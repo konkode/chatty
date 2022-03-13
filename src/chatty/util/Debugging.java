@@ -10,8 +10,10 @@ import java.io.StringWriter;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Timer;
@@ -165,9 +167,28 @@ public class Debugging {
      * @return true if enough time has passed since the last call or it hasn't
      * been called yet (for the given id)
      */
-    public synchronized static boolean millisecondsElapsed(String id, int milliseconds) {
+    public synchronized static boolean millisecondsElapsed(String id, long milliseconds) {
         long elapsed = millisecondsElapsed(id);
         return elapsed == -1 || elapsed >= milliseconds;
+    }
+    
+    /**
+     * Same as {@link millisecondsElapsed(String, long)}, except that the time
+     * is updated only when this returns true.
+     * 
+     * @param id The identifier, can be any string
+     * @param milliseconds The amount of milliseconds
+     * @return true if enough time has passed since the last time this returned
+     * true or it hasn't been called yet (for the given id)
+     */
+    public synchronized static boolean millisecondsElapsedLenient(String id, long milliseconds) {
+        Long previous = stopwatchData.get(id);
+        if (previous == null
+                || System.currentTimeMillis() - previous >= milliseconds) {
+            stopwatchData.put(id, System.currentTimeMillis());
+            return true;
+        }
+        return false;
     }
     
     public synchronized static long count(String key) {
@@ -212,6 +233,56 @@ public class Debugging {
             LOGGER.warning("Error occured trying to get stacktrace: "+ex2);
         }
         return null;
+    }
+    
+    public static String getStacktraceFiltered(Exception ex) {
+        try {
+            return ex+"\n\t"+StringUtil.join(filterStacktrace(ex.getStackTrace()), "\n\t ");
+        }
+        catch (Exception ex2) {
+            LOGGER.warning("Error occured trying to get stacktrace: "+ex2);
+        }
+        return null;
+    }
+    
+    public static String getStacktraceFilteredFlat(Exception ex) {
+        try {
+            return ex+" ["+StringUtil.join(filterStacktrace(ex.getStackTrace()), ",")+"]";
+        }
+        catch (Exception ex2) {
+            LOGGER.warning("Error occured trying to get stacktrace: "+ex2);
+        }
+        return null;
+    }
+    
+    private static final Set<String> STACKTRACE_FILTER = new HashSet<>();
+    
+    static {
+        STACKTRACE_FILTER.add("java.awt.EventDispatchThread");
+        STACKTRACE_FILTER.add("java.awt.EventQueue");
+        STACKTRACE_FILTER.add("java.awt.DefaultKeyboardFocusManager");
+    }
+    
+    public static List<String> filterStacktrace(StackTraceElement[] st) {
+        List<String> result = new ArrayList<>();
+        String filtered = null;
+        for (int i = 0; i < st.length; i++) {
+            StackTraceElement el = st[i];
+            boolean show = true;
+            for (String filter : STACKTRACE_FILTER) {
+                if (el.getClassName().startsWith(filter)) {
+                    if (!filter.equals(filtered)) {
+                        result.add("["+filter+"]");
+                        filtered = filter;
+                    }
+                    show = false;
+                }
+            }
+            if (show) {
+                result.add(el.toString());
+            }
+        }
+        return result;
     }
     
     public static String getStacktrace() {

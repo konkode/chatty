@@ -573,7 +573,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             style = styles.standard(color);
         }
         printTimestamp(style);
-        printUser(user, action, message.whisper, message.id, background, message.tags.isHighlightedMessage());
+        printUser(user, action, message.whisper, message.id, background, message.tags);
         
         // Change style for text if /me and no highlight (if enabled)
         if (!highlighted && color == null && action && styles.isEnabled(Setting.ACTION_COLORED)) {
@@ -1886,7 +1886,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
      * @param msgId 
      */
     private void printUser(User user, boolean action,
-            boolean whisper, String msgId, Color background, boolean pointsHl) {
+            boolean whisper, String msgId, Color background, MsgTags tags) {
         
         // Decide on name based on settings and available names
         String userName;
@@ -1906,7 +1906,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
         
         // Badges or Status Symbols
         if (styles.isEnabled(Setting.USERICONS_ENABLED)) {
-            printUserIcons(user, pointsHl);
+            printUserIcons(user, tags);
         }
         else {
             userName = user.getModeSymbol()+userName;
@@ -2033,9 +2033,9 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
      * 
      * @param user 
      */
-    private void printUserIcons(User user, boolean pointsHl) {
+    private void printUserIcons(User user, MsgTags tags) {
         boolean botBadgeEnabled = styles.isEnabled(Setting.BOT_BADGE_ENABLED);
-        java.util.List<Usericon> badges = user.getBadges(botBadgeEnabled, pointsHl, type == Type.STREAM_CHAT);
+        java.util.List<Usericon> badges = user.getBadges(botBadgeEnabled, tags, type == Type.STREAM_CHAT);
         if (badges != null) {
             for (Usericon badge : badges) {
                 if (badge.image != null && !badge.removeBadge) {
@@ -2319,9 +2319,18 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             Entry<Integer, Integer> range = rangesIt.next();
             int start = range.getKey();
             int end = range.getValue();
+            if (start < lastPrintedPos) {
+                /**
+                 * If the next element overlaps the previous (unusual, but can
+                 * happen for example with Filter), then just skip it.
+                 */
+                continue;
+            }
             if (start > lastPrintedPos) {
-                // If there is anything between the special stuff, print that
-                // first as regular text
+                /**
+                 * If there is anything between this special element and the
+                 * previous printed section, print that first as regular text.
+                 */
                 specialPrint(user, text, lastPrintedPos, start, style, highlightMatches);
             }
             AttributeSet rangeStyle = rangesStyle.get(start);
@@ -2356,7 +2365,7 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
      * @param start
      * @param end
      * @param style
-     * @param highlightMatches 
+     * @param highlightMatches Should be sorted by start index
      */
     private void specialPrint(User user, String text, int start, int end, AttributeSet style, java.util.List<Match> highlightMatches) {
         if (highlightMatches != null) {
@@ -2372,14 +2381,18 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
                         to = end;
                     }
                     if (from > start) {
+                        // Print before match normally
                         String processed = processText(user, text.substring(start, from));
                         print(processed, style);
                     }
                     
+                    // Print match
                     String processed = processText(user, text.substring(from, to));
                     MutableAttributeSet styleCopy = new SimpleAttributeSet(style);
                     styleCopy.addAttribute(Attribute.HIGHLIGHT_WORD, true);
                     print(processed, styleCopy);
+                    
+                    // Continue after match
                     start = to;
                 }
             }
@@ -2545,24 +2558,23 @@ public class ChannelTextPane extends JTextPane implements LinkListener, Emoticon
             addTwitchTagsEmoticons(user, emoticonsById, text, ranges, rangesStyle, tagEmotes);
         }
         
+        // All-channels emotes
         if (user.isLocalUser()) {
-            for (String set : main.emoticons.getLocalEmotesets()) {
-                HashSet<Emoticon> emoticons = main.emoticons.getEmoticonsBySet(set);
+            findEmoticons(main.emoticons.getSmilies(), text, ranges, rangesStyle);
+            findEmoticons(main.emoticons.getUsableGlobalEmotes(), text, ranges, rangesStyle);
+        }
+        else {
+            if (tagEmotes == null) {
+                Set<Emoticon> emoticons = main.emoticons.getGlobalTwitchEmotes();
                 findEmoticons(emoticons, text, ranges, rangesStyle);
             }
-        }
-        
-        // Global emotes
-        if (tagEmotes == null) {
-            Set<Emoticon> emoticons = main.emoticons.getGlobalTwitchEmotes();
+            Set<Emoticon> emoticons = main.emoticons.getOtherGlobalEmotes();
             findEmoticons(emoticons, text, ranges, rangesStyle);
         }
-        Set<Emoticon> emoticons = main.emoticons.getOtherGlobalEmotes();
-        findEmoticons(emoticons, text, ranges, rangesStyle);
-        
+
         // Channel based (may also have a emoteset restriction)
         HashSet<Emoticon> channelEmotes = main.emoticons.getEmoticonsByStream(user.getStream());
-        findEmoticons(user, channelEmotes, text, ranges, rangesStyle, accessToSets);
+        findEmoticons(user, channelEmotes, text, ranges, rangesStyle, main.emoticons.getAllLocalEmotesets());
         
         // Special Combined Emotes
         CombinedEmotesInfo cei = ChattyMisc.getCombinedEmotesInfo();

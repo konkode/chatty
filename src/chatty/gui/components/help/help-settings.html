@@ -55,12 +55,8 @@
         <dd>Connect immediately and join the channels specified in the field
             below. You can define several channels by seperating them with a
             comma.</dd>
-        <dd>Can include Addressbook categories, e.g. <code>[vip]</code> to join
-            all entries associated with the "vip" category. Can restrict to just
-            channel entries <code>[vip #]</code> (would only get Addressbook
-            entries such as "#joshimuz") or non-channel entries <code>[vip !#]</code>
-            (entries such as "joshimuz"). This can also be used in some other
-            places for joining channels.</dd>
+        <dd>For more information on how channels can be specified, such as joining
+            channels by Addressbook category, see <a href="help.html#join">Joining Channels</a>.</dd>
         
         <dt>Connect and join previously open channels</dt>
         <dd>Connect immediately and join the channels you had open when you
@@ -259,7 +255,8 @@
                     the category <code>vip</code>)</li>
                 <li>User-related <a href="#Highlight_Meta_Matching">Highlight Matching</a>
                     prefixes (e.g. <code>$m:status:r</code>, where <code>status:r</code>
-                    is the Highlight Matching prefix)</li>
+                    is the Highlight Matching prefix, or <code>$m:config:t|first-msg=1</code>
+                    to match message tags, some of which are also user-related)</li>
                 <li>Most other <a href="#Usercolors">Usercolors</a> restrictions</li>
             </ul>
         </dd>
@@ -432,7 +429,74 @@
     ignore emotes, because then the correct code will automatically be added to
     the list.</p>
     
+    <h3>
+        <a name="EmoticonsLocal">Local Emotes</a>
+        <a href="#top" class="top">[back to menu]</a>
+    </h3>
+    <p>This feature allows you to configure Twitch Emotes that will always show
+        up as usable in messages you send, the Emotes Dialog and TAB Completion,
+        disregarding if you actually have access to them or not. This only
+        affects your local client, others will only see emote images in your
+        messages when you actually have access to the emotes.</p>
     
+    <p>The use of Local Emotes is intended for Twitch Emotes that are not
+        available through the Twitch API and thus do not show up in messages you
+        send since Chatty doesn't know about them. This issue does not apply
+        when other people receive your messages or when you receive their
+        messages, since Twitch handles emotes parsing serverside for those.</p>
+    
+    <p>With the removal of the old Twitch v5 API in February 2022 this problem
+        can affect even more Emotes than before. The Emote Dialog provides the
+        "Highlight endangered emotes" function until the API is removed (see
+        below).</p>
+    
+    <p>Recommendations:</p>
+    <ul>
+        <li>Only add Twitch Emotes that you have permament access to.</li>
+        <li>Only add Emotes that would otherwise not show up in Chatty in your
+            sent messages or Emote Dialog.</li>
+        <li><strong>Do not add</strong> Global, Subscriber and Follower Emotes
+            as Local Emotes, since they should be available throught the API.</li>
+        <li>If you added a Local Emote by accident or lost access to one then
+            you should remove it again (e.g. through the Emote Context Menu or
+            Settings Dialog).</li>
+    </ul>
+    
+    <p>You can add/remove Local Emotes in different ways:</p>
+    <ul>
+        <li>The <strong>Emote Context Menu</strong> (e.g. right-click on an emote in chat)
+            using the <strong>"Add local emote"</strong> option.
+            For example if you have a favorite emote that you have permanent
+            access to but that isn't available through the API (meaning it
+            doesn't show up in the Emote Dialog or when you send a message), you
+            can send a message with it through Webchat to the same channel you
+            have joined in Chatty and then use the Context Menu option on it.
+        </li>
+        <li>In the <strong>Settings Dialog</strong> in the Emoticon settings you
+            can view and edit the list of Local Emotes.</li>
+        <li>The <strong>Emote Dialog "My Emotes" tab</strong> can highlight
+            Emotes that are only available through the old API, as long as the
+            old API hasn't been removed. Enable the <strong>"Highlight endangered emotes"</strong>
+            checkbox to see which Emotes might make sense to add.
+            <ul>
+                <li>Magenta border: Only available through old API</li>
+                <li>Gray border: Only available through old API, but already
+                    added to Local Emotes</li>
+            </ul>
+            To add Local Emotes you can use:
+            <ul>
+                <li>The Emote Context Menu to add a single Emote</li>
+                <li>The Section Title Context Menu to add all Emotes of a section</li>
+            </ul>
+            <em>Note:</em> You must have a channel joined and all API requests
+            must have finished for this to show up correctly. For example
+            Subscriber Emotes should not be highlighted. If the old API has
+            already been removed, adding Local Emotes through the Emote Dialog
+            doesn't really make sense, since all shown Emotes would be available
+            through the new API anyway.
+        </li>
+    </ul>
+
     <h2>
         <a name="Fonts">Fonts</a>
         <a href="#top" class="top">[back to menu]</a>
@@ -972,7 +1036,11 @@
             <ul>
                 <li><code>config:firstmsg</code> - Restrict matching to the
                     first message of this user in this channel during the
-                    current session (first message in User Dialog)</li>
+                    current session (first message in User Dialog).<br />
+                    To match on the first message of this user in the channel
+                    overall, you can match on the message tags that Twitch
+                    sends: <code>config:t|first-msg=1</code> (as long as Twitch
+                    doesn't change it)</li>
                 <li><code>config:repeatedmsg</code> - Matches if a user repeats
                     the same message (this requires the <a href="#RepeatMsg">Repetition Detection</a> in
                     the Moderation settings to be enabled). Can optionally
@@ -996,6 +1064,16 @@
                     regex matching on the value.</li>
                 <li><code>config:url</code> - Message must contain a URL (same
                     as what is made clickable)</li>
+                <li><code>config:live</code> or <code>config:live|title/game</code> -
+                    Stream must be live, title and game are interpreted as regex
+                    (like the <code>reg:</code> prefix) and match on the stream's
+                    title or game, use <code>!live</code> to negate match<br />
+                    Example: <code>config:live|/"Grand Theft Auto"</code> would match
+                    in any channel with a live stream where <code>Grand Theft Auto</code>
+                    occurs in the currently streamed game/category</li>
+                <li><code>config:!blacklist</code> - Ignore the overall
+                    blacklist for this entry. The <code>blacklist:</code> prefix
+                    still applies though.</li>
             </ul>
         </li>
         <li><a name="Highlight_Prefix-blacklist"><code>blacklist:</code></a> to specify one or more text patterns
@@ -1655,8 +1733,9 @@
     
     <h3>Event settings (Notification/Sound)</h3>
     <dl class="dl-settings">
-        <dt>Channel</dt>
-        <dd>Name of the channel this item should be restricted to.</dd>
+        <dt>Channels</dt>
+        <dd>Name of the channel or channels (comma-separated) this item should be
+            restricted to.</dd>
         
         <dt>Match</dt>
         <dd>Match the given text or message, in the same format as for
@@ -1788,11 +1867,18 @@
         <a name="Other">Other</a>
         <a href="#top" class="top">[back to menu]</a>
     </h2>
+    <h3>Graphic Settings</h3>
+    <p>More information about <a href="help-troubleshooting.html#visual-glitches">Graphics Glitches</a>
+        and <a href="help-troubleshooting.html#scaling">UI Scaling</a>.</p>
+    
+    <h3>Updates</h3>
+    <dl class="dl-settings">
+        <dt>Automatically check for new version</dt>
+        <dd>Checks for new versions every few days and outputs a message about it.</dd>
+    </dl>
+    
     <h3>Other</h3>
     <dl class="dl-settings">
-        <dt>Inform me about new versions</dt>
-        <dd>Checks for new versions every few days and outputs a message about it.</dd>
-        
         <dt>Auto-Unhost when your stream goes live</dt>
         <dd>Automatically
             sends the <code>/unhost</code> command to your channel if you started
